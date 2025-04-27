@@ -1,0 +1,21 @@
+[versions]
+lombok-version = "1.18.32"
+
+
+[libraries]
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok-version" }
+
+
+
+
+
+[bundles]
+
+
+
+
+
+
+
+[plugins]
+freefairLombokPLugin = "io.freefair.lombok:8.13.1"

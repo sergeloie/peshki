@@ -7,19 +7,25 @@ import java.util.Arrays;
 @Getter
 public class GameBoard {
 
-    private final int[][] board;
+    private final String[][] board;
     private final String[][] outputBoard;
 
     public GameBoard() {
         this.outputBoard = new String[8][8];
-        for (int i = 0; i < 7; i++) {
-            for (int j = 0; j < 7; j++) {
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
                 outputBoard[i][j] = " ";
             }
 
         }
 
-        this.board = new int[4][29];
+        this.board = new String[4][29];
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 29; j++) {
+                board[i][j] = "_";
+            }
+
+        }
     }
 
     private void mapOutputBoard() {
@@ -68,6 +74,7 @@ public class GameBoard {
         outputBoard[6][1] = String.valueOf(board[1][22]);
         outputBoard[5][2] = String.valueOf(board[2][22]);
         outputBoard[4][3] = String.valueOf(board[3][22]);
+
     }
 
     public void renderOutputBoard() {

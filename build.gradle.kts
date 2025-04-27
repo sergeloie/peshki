@@ -1,5 +1,6 @@
 plugins {
-	java
+	application
+	alias(libs.plugins.freefairLombokPLugin)
 	id("org.springframework.boot") version "3.3.4"
 	id("io.spring.dependency-management") version "1.1.6"
 }
@@ -26,8 +27,12 @@ repositories {
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-web")
-	compileOnly("org.projectlombok:lombok")
-	annotationProcessor("org.projectlombok:lombok")
+
+	compileOnly(libs.lombok)
+	annotationProcessor(libs.lombok)
+	testCompileOnly(libs.lombok)
+	testAnnotationProcessor(libs.lombok)
+
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
