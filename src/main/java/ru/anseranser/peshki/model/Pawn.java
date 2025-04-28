@@ -2,13 +2,13 @@ package ru.anseranser.peshki.model;
 
 import lombok.Builder;
 import lombok.Getter;
-import ru.anseranser.peshki.enums.PlayerEnum;
+import ru.anseranser.peshki.enums.Player;
 
 
 @Builder
 @Getter
 public class Pawn {
-    private PlayerEnum player;
+    private Player player;
     private int relativePosition;
     private int absolutePosition;
 }

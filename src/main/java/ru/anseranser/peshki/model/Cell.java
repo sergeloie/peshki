@@ -2,13 +2,13 @@ package ru.anseranser.peshki.model;
 
 import lombok.Getter;
 import lombok.Setter;
-import ru.anseranser.peshki.enums.PlayerEnum;
+import ru.anseranser.peshki.enums.Player;
 
 @Getter
 @Setter
 public class Cell {
     private boolean isCorner;
-    private PlayerEnum playersCorner;
+    private Player playersCorner;
     private int cellNumber;
     private int player1CellNumber;
     private int player2CellNumber;

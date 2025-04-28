@@ -3,7 +3,7 @@ package ru.anseranser.peshki.enums;
 import lombok.Getter;
 
 @Getter
-public enum PlayerEnum {
+public enum Player {
     PLAYER1(0),
     PLAYER2(7),
     PLAYER3(14),
@@ -11,7 +11,7 @@ public enum PlayerEnum {
 
     private final int value;
 
-    PlayerEnum(int value) {
+    Player(int value) {
         this.value = value;
     }
 }

@@ -1,6 +1,6 @@
 package ru.anseranser.peshki;
 
-import ru.anseranser.peshki.enums.PlayerEnum;
+import ru.anseranser.peshki.enums.Player;
 import ru.anseranser.peshki.model.GameBoard;
 import ru.anseranser.peshki.model.Pawn;
 
@@ -15,14 +15,14 @@ public class Main {
         bb[3][22] = "4";
         gameBoard.renderOutputBoard();
 
-        Pawn pawn = Pawn.builder().player(PlayerEnum.PLAYER2).build();
+        Pawn pawn = Pawn.builder().player(Player.PLAYER2).build();
         System.out.println(pawn);
         System.out.println(pawn.getPlayer().getValue());
 
-        PlayerEnum p1 = PlayerEnum.PLAYER1;
-        PlayerEnum p2 = PlayerEnum.PLAYER2;
-        PlayerEnum p3 = PlayerEnum.PLAYER3;
-        PlayerEnum p4 = PlayerEnum.PLAYER4;
+        Player p1 = Player.PLAYER1;
+        Player p2 = Player.PLAYER2;
+        Player p3 = Player.PLAYER3;
+        Player p4 = Player.PLAYER4;
 
         System.out.println(p1);
         System.out.println(p2);
