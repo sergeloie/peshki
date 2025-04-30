@@ -9,11 +9,9 @@ import ru.anseranser.peshki.enums.Player;
 public class Cell {
     private boolean isCorner;
     private Player playersCorner;
+    private boolean isHome;
+    private int homeNumber;
     private int cellNumber;
-    private int player1CellNumber;
-    private int player2CellNumber;
-    private int player3CellNumber;
-    private int player4CellNumber;
     private Pawn pawn;
     private Cell nextCell;
     private Cell homeCell;
