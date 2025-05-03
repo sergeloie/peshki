@@ -9,7 +9,9 @@ import ru.anseranser.peshki.enums.Player;
 @Getter
 public class Pawn {
     private Player player;
-    private int relativePosition;
-    private int absolutePosition;
+    private Cell cell;
+    private boolean newBorn;
+
+
 }
 
