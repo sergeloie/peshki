@@ -28,6 +28,8 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-web")
 
+	implementation("org.atp-fivt:ljv:1.04")
+
 	compileOnly(libs.lombok)
 	annotationProcessor(libs.lombok)
 	testCompileOnly(libs.lombok)

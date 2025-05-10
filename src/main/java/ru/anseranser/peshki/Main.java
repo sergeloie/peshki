@@ -5,6 +5,10 @@ import ru.anseranser.peshki.enums.Player;
 import ru.anseranser.peshki.model.GameBoard;
 import ru.anseranser.peshki.model.Pawn;
 
+import java.util.Arrays;
+
+import static ru.anseranser.peshki.util.Dice.DropDices;
+
 public class Main {
     public static void main(String[] args) {
 //        GameBoard gameBoard = new GameBoard();
@@ -30,11 +34,14 @@ public class Main {
 //        System.out.println(p3);
 //        System.out.println(p4);
 
-        ArrDraft arrDraft = new ArrDraft();
-        arrDraft.getField()[0][0] = 105;
-        arrDraft.getField()[0][6] = 227;
-        arrDraft.getField()[2][14] = 330;
-        arrDraft.getField()[2][13] = 330;
-        arrDraft.printFieldInline();
+//        ArrDraft arrDraft = new ArrDraft();
+//        arrDraft.getField()[0][0] = 105;
+//        arrDraft.getField()[0][6] = 227;
+//        arrDraft.getField()[2][14] = 330;
+//        arrDraft.getField()[2][13] = 330;
+//        arrDraft.printFieldInline();
+
+        int[] arr = DropDices();
+        System.out.println(Arrays.toString(arr));
     }
 }

@@ -10,8 +10,7 @@ import ru.anseranser.peshki.enums.Player;
 public class Pawn {
     private Player player;
     private Cell cell;
+    private NewCell newCell;
     private boolean newBorn;
-
-
 }
 

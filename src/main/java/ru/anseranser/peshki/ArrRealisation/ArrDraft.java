@@ -29,6 +29,9 @@ public class ArrDraft {
         }
         int cornerIndex = corners.get(field[i][j] / 100);
 
+
+
+        return 0;//stub
     }
 
 
