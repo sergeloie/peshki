@@ -1,5 +1,6 @@
 package ru.anseranser.peshki.util;
 
+import java.util.List;
 import java.util.Random;
 import java.util.stream.IntStream;
 
@@ -14,10 +15,11 @@ public class Dice {
         return random.nextInt(1, numberOfSidesOnDice + 1);
     }
 
-    public static int[] DropDices() {
+    public static List<Integer> DropDices() {
         return IntStream
                 .generate(Dice::DropDice)
                 .limit(numberOfDices)
-                .toArray();
+                .boxed()
+                .toList();
     }
 }

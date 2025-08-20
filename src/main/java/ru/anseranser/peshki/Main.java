@@ -6,6 +6,7 @@ import ru.anseranser.peshki.model.GameBoard;
 import ru.anseranser.peshki.model.Pawn;
 
 import java.util.Arrays;
+import java.util.List;
 
 import static ru.anseranser.peshki.util.Dice.DropDices;
 
@@ -41,7 +42,7 @@ public class Main {
 //        arrDraft.getField()[2][13] = 330;
 //        arrDraft.printFieldInline();
 
-        int[] arr = DropDices();
-        System.out.println(Arrays.toString(arr));
+        List<Integer> arr = DropDices();
+        System.out.println(arr);
     }
 }
