@@ -1,55 +1,49 @@
 package ru.anseranser.peshki.model;
 
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.Setter;
-import ru.anseranser.peshki.enums.Player;
+import ru.anseranser.peshki.enums.CellType;
 
+@RequiredArgsConstructor
 @Getter
 @Setter
 public class Cell {
-    private boolean isHome;
-    private Player whoseHomeCell;
-    private int homeNumber;
-    private int absolutePosition;
-    private int relativePosition;
-    private Pawn pawn;
+    private final CellType cellType;
     private Cell nextFieldCell;
     private Cell nextHomeCell;
+    private Player cornerOrHomeOwner;
+    private Pawn pawn;
 
-    public Cell getNextCellForPawn(Pawn pawn) {
-/*        if (nextHomeCell == null) {
+    public Cell(CellType cellType, Player cornerOrHomeOwner) {
+        this.cellType = cellType;
+        this.cornerOrHomeOwner = cornerOrHomeOwner;
+    }
+
+
+    /* В зависимости от игрока вернуть следующую клетку. Актуально для ситуаций:
+    1) Пешка только встала на свой угол
+    2) Пешка прошла круг и попадает на свой или чужой угол
+     */
+    public Cell getNextCell(Pawn pawn) {
+
+        //Если пешка только встала на свой угол, то для неё следующая клетка - полевая
+        if (pawn.getIsNewBorn()) {
             return nextFieldCell;
         }
-        if (nextHomeCell.getWhoseHomeCell().equals(pawn.getPlayer()) && !pawn.isNewBorn()) {
-            return nextHomeCell;
-        } else {
-            return nextFieldCell;
-        }*/
-        if (nextHomeCell != null
-                && nextHomeCell.getWhoseHomeCell().equals(pawn.getPlayer())
-                && !pawn.isNewBorn()) {
-            return nextHomeCell;
-        } else {
+
+        //Если текущая клетка - полевая, то вернуть следующую полевую клетку
+        if (this.cellType == CellType.FIELD) {
             return nextFieldCell;
         }
+
+        //Если текущая клетка - угол, то вернуть домашнюю, если угол принадлежит игроку, иначе, вернуть полевую
+        if (this.cellType == CellType.CORNER && this.cornerOrHomeOwner.equals(pawn.getPlayer())) {
+            return nextHomeCell;
+        }
+        return nextFieldCell;
     }
 
-    public boolean isCorner() {
-        return absolutePosition % 7 == 0;
-    }
 
-    public Player whoseCorner() {
-        return switch (absolutePosition) {
-            case 0 -> Player.PLAYER1;
-            case 7 -> Player.PLAYER2;
-            case 14 -> Player.PLAYER3;
-            case 21 -> Player.PLAYER4;
-            default -> throw new IllegalStateException("Not corner cell: " + absolutePosition);
-        };
-    }
-
-    public int getRelativePosition(Player player) {
-        int offset = player.getValue();
-        return (absolutePosition - offset + 28) % 28;
-    }
 }
+

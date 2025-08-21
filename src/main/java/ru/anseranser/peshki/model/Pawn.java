@@ -1,16 +1,26 @@
 package ru.anseranser.peshki.model;
 
-import lombok.Builder;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
-import ru.anseranser.peshki.enums.Player;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 
-
-@Builder
+@RequiredArgsConstructor
 @Getter
+@Setter
 public class Pawn {
-    private Player player;
+    private final Player player;
     private Cell cell;
-    private NewCell newCell;
-    private boolean newBorn;
-}
+    private Boolean isNewBorn;
 
+
+    //TODO Move to defined cell
+    public Cell movePawn(Cell cell) {
+        return null;
+    }
+
+    // TODO Move "moveLength" steps ahead
+    public Cell movePawn(int moveLength) {
+        return null;
+    }
+}
