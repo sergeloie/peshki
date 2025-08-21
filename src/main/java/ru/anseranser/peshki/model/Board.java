@@ -5,6 +5,7 @@ import ru.anseranser.peshki.enums.CellType;
 
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -17,12 +18,10 @@ import static ru.anseranser.peshki.MainConfig.sideLength;
 public class Board {
 
     private final List<Player> players;
-    private final Map<Player, List<Pawn>> allPawns;
     private final Map<Player, Cell> corners;
 
     public Board() {
         this.players = generatePlayers();
-        this.allPawns = generatePawns();
         this.corners = generateCorners();
         generateHomeCells();
         generateFieldCells();
@@ -31,19 +30,10 @@ public class Board {
     private List<Player> generatePlayers() {
         return IntStream
                 .rangeClosed(1, numberOfPlayers)
-                .mapToObj(Player::new)
+                .mapToObj(p -> new Player(p, this))
                 .toList();
     }
 
-    private Map<Player, List<Pawn>> generatePawns() {
-        return players.stream()
-                .collect(Collectors.toMap(
-                        Function.identity(),
-                        player -> IntStream.rangeClosed(1, numberOfPawns)
-                                .mapToObj(i -> new Pawn(player))
-                                .toList()
-                ));
-    }
 
     private Map<Player, Cell> generateCorners() {
         return players.stream()
@@ -75,15 +65,5 @@ public class Board {
             }
             previousCell.setNextFieldCell(cornerCells.get((i + 1) % numberOfPlayers));
         }
-    }
-
-    /*TODO Установка новой пешки игрока на угол. Должен выполняться ряд условий. Вернёт true, если пешка встала успешно и false, если пешку поставить нельзя
-    1) Угол не занят своей же пешкой
-    2) Если угол занят чужой пешкой, то срубаем её (сделать сейчас метод для удаления пешки с доски и возврата в пул пешек)
-    3) Ставим свою пешку, ставим newBorn true
-    */
-    public boolean putNewPawn(Player player) {
-        Cell playerCorner = corners.get(player);
-
     }
 }

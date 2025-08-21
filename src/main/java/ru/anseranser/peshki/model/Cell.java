@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import ru.anseranser.peshki.enums.CellType;
 
+import static ru.anseranser.peshki.enums.PawnState.*;
+
 @RequiredArgsConstructor
 @Getter
 @Setter
@@ -28,7 +30,7 @@ public class Cell {
     public Cell getNextCell(Pawn pawn) {
 
         //Если пешка только встала на свой угол, то для неё следующая клетка - полевая
-        if (pawn.getIsNewBorn()) {
+        if (pawn.getState() == NEWBORN) {
             return nextFieldCell;
         }
 
@@ -44,6 +46,18 @@ public class Cell {
         return nextFieldCell;
     }
 
+    public Pawn replacePawn(Pawn replacement) {
 
+        if (this.pawn != null) {
+            if (this.pawn.getPlayer().equals(replacement.getPlayer())) {
+                throw new RuntimeException("This cell already occupied by your pawn player " + this.getPawn().getPlayer().getPlayerNumber());
+            } else {
+                this.pawn.remove();
+            }
+        }
+        replacement.setCell(this);
+        setPawn(replacement);
+        return replacement;
+    }
 }
 

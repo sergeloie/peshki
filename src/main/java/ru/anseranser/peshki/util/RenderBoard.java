@@ -3,7 +3,6 @@ package ru.anseranser.peshki.util;
 import ru.anseranser.peshki.model.Board;
 import ru.anseranser.peshki.model.Cell;
 
-import java.util.Collection;
 import java.util.List;
 
 import static ru.anseranser.peshki.MainConfig.sideLength;
@@ -20,10 +19,10 @@ public class RenderBoard {
     private static void fillCorners(Board board, char[][] matrix) {
 
         List<Cell> corners = board.getCorners().values().stream().toList();
-        matrix[1][1] = corners.get(0).getPawn() == null ? '#' : (char) (corners.get(0).getPawn().getPlayer().getPlayerNumber() - '0');
-        matrix[1][8] = corners.get(1).getPawn() == null ? '#' : (char) (corners.get(1).getPawn().getPlayer().getPlayerNumber() - '0');
-        matrix[8][8] = corners.get(2).getPawn() == null ? '#' : (char) (corners.get(2).getPawn().getPlayer().getPlayerNumber() - '0');
-        matrix[8][1] = corners.get(3).getPawn() == null ? '#' : (char) (corners.get(3).getPawn().getPlayer().getPlayerNumber() - '0');
+        matrix[1][1] = corners.get(0).getPawn() == null ? '#' : (char) (corners.get(0).getPawn().getPlayer().getPlayerNumber() + '0');
+        matrix[1][8] = corners.get(1).getPawn() == null ? '#' : (char) (corners.get(1).getPawn().getPlayer().getPlayerNumber() + '0');
+        matrix[8][8] = corners.get(2).getPawn() == null ? '#' : (char) (corners.get(2).getPawn().getPlayer().getPlayerNumber() + '0');
+        matrix[8][1] = corners.get(3).getPawn() == null ? '#' : (char) (corners.get(3).getPawn().getPlayer().getPlayerNumber() + '0');
     }
 
     public static void printCharMatrix(char[][] matrix, int hSpacing, int vSpacing) {
