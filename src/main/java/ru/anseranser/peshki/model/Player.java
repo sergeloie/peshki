@@ -22,7 +22,7 @@ public class Player {
     @EqualsAndHashCode.Exclude
     private final Board board;
     private final List<Pawn> pawns;
-    private final Cell corner;
+    private Cell corner;
 
     //todo создание пешек должно быть здесь, в классе игрока
     public Player(int playerNumber, Board board) {
@@ -41,9 +41,12 @@ public class Player {
     }
 
     public Pawn putNewPawn() {
-        Cell corner = board.getCorners().get(this);
-        Pawn replacement = getBenchPawn();
-
+        Cell cornerCell = board.getCorners().get(this);
+        Pawn pawn = getBenchPawn();
+        cornerCell.setPawn(pawn);
+        pawn.setCell(cornerCell);
+        pawn.setState(Pawn.PawnState.NEWBORN);
+        return pawn;
     }
 
     private Integer DropDice() {
@@ -61,5 +64,9 @@ public class Player {
         return pawns.stream()
                 .filter(pawn -> pawn.getState() == pawnState)
                 .toList();
+    }
+
+    public void setCorner(Cell corner) {
+        this.corner = corner;
     }
 }

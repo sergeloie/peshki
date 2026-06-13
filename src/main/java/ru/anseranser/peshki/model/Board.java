@@ -42,7 +42,11 @@ public class Board {
         return players.stream()
                 .collect(Collectors.toMap(
                         Function.identity(),
-                        player -> new Cell(CellType.CORNER, player)
+                        player -> {
+                            Cell corner = new Cell(CellType.CORNER, player);
+                            player.setCorner(corner);
+                            return corner;
+                        }
                 ));
     }
 

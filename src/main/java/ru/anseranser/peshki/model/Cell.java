@@ -19,10 +19,15 @@ public class Cell {
     private Cell nextFieldCell;
     private Cell nextHomeCell;
     private Player cornerOrHomeOwner;
+    private Pawn pawn;
 
     public Cell(CellType cellType, Player cornerOrHomeOwner) {
         this.cellType = cellType;
         this.cornerOrHomeOwner = cornerOrHomeOwner;
+    }
+
+    public void removePawn() {
+        this.pawn = null;
     }
 }
 

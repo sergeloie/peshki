@@ -9,6 +9,10 @@ plugins {
 group = "ru.anseranser"
 version = "0.0.1-SNAPSHOT"
 
+application {
+    mainClass.set("ru.anseranser.peshki.Main")
+}
+
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)
