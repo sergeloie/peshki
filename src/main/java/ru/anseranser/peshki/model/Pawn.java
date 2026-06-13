@@ -4,7 +4,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import static ru.anseranser.peshki.model.Pawn.PawnState.BENCH;
-import static ru.anseranser.peshki.model.Pawn.PawnState.FINISHER;
 import static ru.anseranser.peshki.model.Pawn.PawnState.HOMER;
 
 @Getter
@@ -15,8 +14,7 @@ public class Pawn {
         BENCH,
         NEWBORN,
         FIELDER,
-        HOMER,
-        FINISHER
+        HOMER
     }
 
     private final Player player;
@@ -29,7 +27,7 @@ public class Pawn {
     }
 
     public void remove() {
-        if (state == HOMER || state == FINISHER) {
+        if (state == HOMER) {
             throw new RuntimeException("Can not remove pawn in home area");
         }
         if (state == BENCH) {

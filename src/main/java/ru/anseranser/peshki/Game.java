@@ -115,20 +115,14 @@ public class Game {
         Cell corner = board.getCorner(player);
         boolean inHome = pawn.getState() == Pawn.PawnState.HOMER;
         boolean isLastLapPawn = !inHome
-                && player.getPawnsByState(Pawn.PawnState.HOMER, Pawn.PawnState.FINISHER).size() == numberOfPawns - 1;
+                && player.getPawnsByState(Pawn.PawnState.HOMER).size() == numberOfPawns - 1;
 
         for (int i = 0; i < steps; i++) {
             Cell next;
 
             if (!inHome) {
                 next = current.getNextFieldCell();
-                if (next == corner) {
-                    if (isLastLapPawn) {
-                        if (i < steps - 1) {
-                            return null;
-                        }
-                        return corner;
-                    }
+                if (next == corner && !isLastLapPawn) {
                     inHome = true;
                     next = next.getNextHomeCell();
                 }
@@ -151,6 +145,11 @@ public class Game {
 
             current = next;
         }
+
+        if (isLastLapPawn && current == corner) {
+            return corner;
+        }
+
         return current;
     }
 
@@ -168,24 +167,18 @@ public class Game {
         if (pawn.getState() == Pawn.PawnState.FIELDER && targetCell.getCellType() == Cell.CellType.HOME) {
             pawn.setState(Pawn.PawnState.HOMER);
         }
-
-        if (pawn.getState() == Pawn.PawnState.HOMER && targetCell.getNextHomeCell() == null) {
-            pawn.setState(Pawn.PawnState.FINISHER);
-        }
     }
 
     private boolean isGameOver() {
         return board.getPlayers().stream()
                 .anyMatch(player -> {
                     long homeCount = player.getPawns().stream()
-                            .filter(pawn -> pawn.getState() == Pawn.PawnState.HOMER
-                                    || pawn.getState() == Pawn.PawnState.FINISHER)
+                            .filter(pawn -> pawn.getState() == Pawn.PawnState.HOMER)
                             .count();
                     if (homeCount != numberOfPawns - 1) return false;
 
                     Pawn lastPawn = player.getPawns().stream()
-                            .filter(pawn -> pawn.getState() != Pawn.PawnState.HOMER
-                                    && pawn.getState() != Pawn.PawnState.FINISHER)
+                            .filter(pawn -> pawn.getState() != Pawn.PawnState.HOMER)
                             .findFirst()
                             .orElse(null);
 
