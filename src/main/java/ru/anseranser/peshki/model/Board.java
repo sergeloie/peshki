@@ -6,13 +6,10 @@ import ru.anseranser.peshki.model.Cell.CellType;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
-import static java.util.stream.Collectors.toList;
 import static ru.anseranser.peshki.MainConfig.numberOfPawns;
 import static ru.anseranser.peshki.MainConfig.numberOfPlayers;
 import static ru.anseranser.peshki.MainConfig.sideLength;
@@ -74,5 +71,9 @@ public class Board {
             }
             previousCell.setNextFieldCell(cornerCells.get((i + 1) % numberOfPlayers));
         }
+    }
+
+    public Cell getCorner(Player player) {
+        return corners.get(player);
     }
 }

@@ -3,8 +3,9 @@ package ru.anseranser.peshki.model;
 import lombok.Getter;
 import lombok.Setter;
 
-import static ru.anseranser.peshki.model.Pawn.PawnState.*;
-
+import static ru.anseranser.peshki.model.Pawn.PawnState.BENCH;
+import static ru.anseranser.peshki.model.Pawn.PawnState.FINISHER;
+import static ru.anseranser.peshki.model.Pawn.PawnState.HOMER;
 
 @Getter
 @Setter
@@ -37,19 +38,5 @@ public class Pawn {
         cell.setPawn(null);
         setCell(null);
         setState(BENCH);
-    }
-
-
-    //TODO Move to defined cell
-    public void movePawn(Cell cell) {
-        cell.removePawn();
-        cell.setPawn(this);
-        this.cell.setPawn(null);
-        this.cell = cell;
-    }
-
-    // TODO Move "moveLength" steps ahead
-    public Cell movePawn(int moveLength) {
-        return null;
     }
 }

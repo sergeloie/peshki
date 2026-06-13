@@ -60,9 +60,14 @@ public class Player {
                 .toList();
     }
 
-    private List<Pawn> getPawnsByState(Pawn.PawnState pawnState) {
+    public List<Pawn> getPawnsByState(Pawn.PawnState... states) {
         return pawns.stream()
-                .filter(pawn -> pawn.getState() == pawnState)
+                .filter(pawn -> {
+                    for (Pawn.PawnState state : states) {
+                        if (pawn.getState() == state) return true;
+                    }
+                    return false;
+                })
                 .toList();
     }
 
