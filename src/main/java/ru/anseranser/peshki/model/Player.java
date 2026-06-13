@@ -71,6 +71,49 @@ public class Player {
                 .toList();
     }
 
+    public boolean tryPlaceNewPawn() {
+        Pawn existingPawn = corner.getPawn();
+
+        if (existingPawn != null && existingPawn.getPlayer().equals(this)) {
+            return false;
+        }
+
+        if (getPawnsByState(BENCH).isEmpty()) {
+            return false;
+        }
+
+        if (existingPawn != null) {
+            existingPawn.remove();
+        }
+
+        putNewPawn();
+        return true;
+    }
+
+    public boolean tryMovePawns(List<Integer> dice) {
+        boolean kickedEnemy = false;
+        for (int diceValue : dice) {
+            List<Pawn> moveablePawns = getPawnsByState(
+                    Pawn.PawnState.NEWBORN,
+                    Pawn.PawnState.FIELDER,
+                    Pawn.PawnState.HOMER);
+            for (Pawn pawn : moveablePawns) {
+                Cell targetCell = pawn.findTargetCell(diceValue);
+                if (targetCell != null) {
+                    if (pawn.getState() != Pawn.PawnState.HOMER
+                            && targetCell.getPawn() != null
+                            && !targetCell.getPawn().getPlayer().equals(this)) {
+                        targetCell.getPawn().remove();
+                        kickedEnemy = true;
+                    }
+                    pawn.moveTo(targetCell);
+                    break;
+                }
+            }
+        }
+        return kickedEnemy;
+    }
+
     public void setCorner(Cell corner) {
         this.corner = corner;
     }

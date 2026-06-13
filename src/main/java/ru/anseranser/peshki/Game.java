@@ -1,7 +1,6 @@
 package ru.anseranser.peshki;
 
 import ru.anseranser.peshki.model.Board;
-import ru.anseranser.peshki.model.Cell;
 import ru.anseranser.peshki.model.Pawn;
 import ru.anseranser.peshki.model.Player;
 import ru.anseranser.peshki.util.RenderBoard;
@@ -31,16 +30,15 @@ public class Game {
             boolean extraTurn = takeTurn(currentPlayer);
             RenderBoard.drawBoard(board);
             System.out.println();
+            if (isGameOver()) {
+                System.out.println("Player " + currentPlayer.getPlayerNumber() + " wins!");
+                return;
+            }
             if (!extraTurn) {
                 currentPlayerIndex = (currentPlayerIndex + 1) % board.getPlayers().size();
             }
         }
-        if (isGameOver()) {
-            Player winner = board.getPlayers().get(currentPlayerIndex);
-            System.out.println("Player " + winner.getPlayerNumber() + " wins!");
-        } else {
-            System.out.println("Game ended after " + MAX_TURNS + " turns.");
-        }
+        System.out.println("Game ended after " + MAX_TURNS + " turns.");
     }
 
     private boolean takeTurn(Player player) {
@@ -53,120 +51,15 @@ public class Game {
         List<Integer> moveDice = new ArrayList<>(dice);
 
         if (rolledSix) {
-            boolean placed = tryPlaceNewPawn(player);
+            boolean placed = player.tryPlaceNewPawn();
             if (placed) {
                 moveDice.remove(Integer.valueOf(6));
             }
         }
 
-        kickedEnemy = tryMovePawns(player, moveDice);
+        kickedEnemy = player.tryMovePawns(moveDice);
 
         return rolledSix || kickedEnemy;
-    }
-
-    private boolean tryPlaceNewPawn(Player player) {
-        Cell cornerCell = board.getCorners().get(player);
-        Pawn existingPawn = cornerCell.getPawn();
-
-        if (existingPawn != null && existingPawn.getPlayer().equals(player)) {
-            return false;
-        }
-
-        List<Pawn> benchPawns = player.getPawnsByState(Pawn.PawnState.BENCH);
-        if (benchPawns.isEmpty()) {
-            return false;
-        }
-
-        if (existingPawn != null) {
-            existingPawn.remove();
-        }
-
-        player.putNewPawn();
-        return true;
-    }
-
-    private boolean tryMovePawns(Player player, List<Integer> dice) {
-        boolean kickedEnemy = false;
-        for (int diceValue : dice) {
-            List<Pawn> moveablePawns = player.getPawnsByState(
-                    Pawn.PawnState.NEWBORN,
-                    Pawn.PawnState.FIELDER,
-                    Pawn.PawnState.HOMER);
-            for (Pawn pawn : moveablePawns) {
-                Cell targetCell = findTargetCell(pawn, diceValue);
-                if (targetCell != null) {
-                    if (pawn.getState() != Pawn.PawnState.HOMER
-                            && targetCell.getPawn() != null
-                            && !targetCell.getPawn().getPlayer().equals(player)) {
-                        targetCell.getPawn().remove();
-                        kickedEnemy = true;
-                    }
-                    movePawn(pawn, targetCell);
-                    break;
-                }
-            }
-        }
-        return kickedEnemy;
-    }
-
-    private Cell findTargetCell(Pawn pawn, int steps) {
-        Cell current = pawn.getCell();
-        Player player = pawn.getPlayer();
-        Cell corner = board.getCorner(player);
-        boolean inHome = pawn.getState() == Pawn.PawnState.HOMER;
-        boolean isLastLapPawn = !inHome
-                && player.getPawnsByState(Pawn.PawnState.HOMER).size() == numberOfPawns - 1;
-
-        for (int i = 0; i < steps; i++) {
-            Cell next;
-
-            if (!inHome) {
-                next = current.getNextFieldCell();
-                if (next == corner && !isLastLapPawn) {
-                    inHome = true;
-                    next = next.getNextHomeCell();
-                }
-            } else {
-                next = current.getNextHomeCell();
-            }
-
-            if (next == null) {
-                return null;
-            }
-
-            if (i < steps - 1 && next.getPawn() != null) {
-                return null;
-            }
-
-            if (i == steps - 1 && next.getPawn() != null
-                    && next.getPawn().getPlayer().equals(player)) {
-                return null;
-            }
-
-            current = next;
-        }
-
-        if (isLastLapPawn && current == corner) {
-            return corner;
-        }
-
-        return current;
-    }
-
-    private void movePawn(Pawn pawn, Cell targetCell) {
-        if (pawn.getCell() != null) {
-            pawn.getCell().setPawn(null);
-        }
-        targetCell.setPawn(pawn);
-        pawn.setCell(targetCell);
-
-        if (pawn.getState() == Pawn.PawnState.NEWBORN) {
-            pawn.setState(Pawn.PawnState.FIELDER);
-        }
-
-        if (pawn.getState() == Pawn.PawnState.FIELDER && targetCell.getCellType() == Cell.CellType.HOME) {
-            pawn.setState(Pawn.PawnState.HOMER);
-        }
     }
 
     private boolean isGameOver() {

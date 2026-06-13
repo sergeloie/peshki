@@ -3,6 +3,7 @@ package ru.anseranser.peshki.model;
 import lombok.Getter;
 import lombok.Setter;
 
+import static ru.anseranser.peshki.MainConfig.numberOfPawns;
 import static ru.anseranser.peshki.model.Pawn.PawnState.BENCH;
 import static ru.anseranser.peshki.model.Pawn.PawnState.HOMER;
 
@@ -36,5 +37,64 @@ public class Pawn {
         cell.setPawn(null);
         setCell(null);
         setState(BENCH);
+    }
+
+    public Cell findTargetCell(int steps) {
+        Cell current = this.cell;
+        Cell corner = player.getCorner();
+        boolean inHome = this.state == PawnState.HOMER;
+        boolean isLastLapPawn = !inHome
+                && player.getPawnsByState(PawnState.HOMER).size() == numberOfPawns - 1;
+
+        for (int i = 0; i < steps; i++) {
+            Cell next;
+
+            if (!inHome) {
+                next = current.getNextFieldCell();
+                if (next == corner && !isLastLapPawn) {
+                    inHome = true;
+                    next = next.getNextHomeCell();
+                }
+            } else {
+                next = current.getNextHomeCell();
+            }
+
+            if (next == null) {
+                return null;
+            }
+
+            if (i < steps - 1 && next.getPawn() != null) {
+                return null;
+            }
+
+            if (i == steps - 1 && next.getPawn() != null
+                    && next.getPawn().getPlayer().equals(player)) {
+                return null;
+            }
+
+            current = next;
+        }
+
+        if (isLastLapPawn && current == corner) {
+            return corner;
+        }
+
+        return current;
+    }
+
+    public void moveTo(Cell targetCell) {
+        if (this.cell != null) {
+            this.cell.setPawn(null);
+        }
+        targetCell.setPawn(this);
+        this.cell = targetCell;
+
+        if (this.state == PawnState.NEWBORN) {
+            this.state = PawnState.FIELDER;
+        }
+
+        if (this.state == PawnState.FIELDER && targetCell.getCellType() == Cell.CellType.HOME) {
+            this.state = PawnState.HOMER;
+        }
     }
 }
