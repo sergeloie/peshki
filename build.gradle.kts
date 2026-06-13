@@ -3,6 +3,7 @@ plugins {
 	alias(libs.plugins.freefairLombokPLugin)
 	id("org.springframework.boot") version "3.3.4"
 	id("io.spring.dependency-management") version "1.1.6"
+	id("com.autonomousapps.dependency-analysis") version "1.30.0"
 }
 
 group = "ru.anseranser"
@@ -37,6 +38,8 @@ dependencies {
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+	implementation("com.lihaoyi:mill-moduledefs_3:0.12.7")
 }
 
 tasks.withType<Test> {

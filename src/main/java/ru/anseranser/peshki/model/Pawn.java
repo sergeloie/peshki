@@ -2,14 +2,22 @@ package ru.anseranser.peshki.model;
 
 import lombok.Getter;
 import lombok.Setter;
-import ru.anseranser.peshki.enums.PawnState;
 
-import static ru.anseranser.peshki.enums.PawnState.*;
+import static ru.anseranser.peshki.model.Pawn.PawnState.*;
 
 
 @Getter
 @Setter
 public class Pawn {
+
+    public enum PawnState {
+        BENCH,
+        NEWBORN,
+        FIELDER,
+        HOMER,
+        FINISHER
+    }
+
     private final Player player;
     private Cell cell;
     private PawnState state;
@@ -33,8 +41,11 @@ public class Pawn {
 
 
     //TODO Move to defined cell
-    public Cell movePawn(Cell cell) {
-        return null;
+    public void movePawn(Cell cell) {
+        cell.removePawn();
+        cell.setPawn(this);
+        this.cell.setPawn(null);
+        this.cell = cell;
     }
 
     // TODO Move "moveLength" steps ahead

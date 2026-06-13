@@ -4,18 +4,25 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import java.util.List;
+import java.util.Random;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
+import static ru.anseranser.peshki.MainConfig.numberOfDices;
 import static ru.anseranser.peshki.MainConfig.numberOfPawns;
-import static ru.anseranser.peshki.enums.PawnState.BENCH;
+import static ru.anseranser.peshki.MainConfig.numberOfSidesOnDice;
+import static ru.anseranser.peshki.model.Pawn.PawnState.BENCH;
 
 @Getter
 @EqualsAndHashCode
 public class Player {
-    private final int playerNumber;
+    private static final Random random = new Random();
+
+    private final Integer playerNumber;
     @EqualsAndHashCode.Exclude
     private final Board board;
     private final List<Pawn> pawns;
+    private final Cell corner;
 
     //todo создание пешек должно быть здесь, в классе игрока
     public Player(int playerNumber, Board board) {
@@ -36,6 +43,23 @@ public class Player {
     public Pawn putNewPawn() {
         Cell corner = board.getCorners().get(this);
         Pawn replacement = getBenchPawn();
-        return corner.replacePawn(replacement);
+
+    }
+
+    private Integer DropDice() {
+        return random.nextInt(1, numberOfSidesOnDice + 1);
+    }
+
+    public List<Integer> DropDices() {
+        return Stream
+                .generate(this::DropDice)
+                .limit(numberOfDices)
+                .toList();
+    }
+
+    private List<Pawn> getPawnsByState(Pawn.PawnState pawnState) {
+        return pawns.stream()
+                .filter(pawn -> pawn.getState() == pawnState)
+                .toList();
     }
 }

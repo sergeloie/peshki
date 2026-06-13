@@ -1,15 +1,18 @@
 package ru.anseranser.peshki.model;
 
 import lombok.Getter;
-import ru.anseranser.peshki.enums.CellType;
+import ru.anseranser.peshki.model.Cell.CellType;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
+import static java.util.stream.Collectors.toList;
 import static ru.anseranser.peshki.MainConfig.numberOfPawns;
 import static ru.anseranser.peshki.MainConfig.numberOfPlayers;
 import static ru.anseranser.peshki.MainConfig.sideLength;
@@ -55,10 +58,12 @@ public class Board {
     }
 
     private void generateFieldCells() {
-        List<Cell> cornerCells = corners.values().stream().toList();
+        List<Cell> cornerCells = corners.values().stream()
+                .sorted(Comparator.comparing(cell -> cell.getCornerOrHomeOwner().getPlayerNumber()))
+                .toList();
         for (int i = 0; i < cornerCells.size(); i++) {
             Cell previousCell = cornerCells.get(i);
-            for (int j = 1; j <= sideLength - 2 ; j++) {
+            for (int j = 1; j <= sideLength - 2; j++) {
                 Cell currentCell = new Cell(CellType.FIELD);
                 previousCell.setNextFieldCell(currentCell);
                 previousCell = currentCell;
