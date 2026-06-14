@@ -20,14 +20,14 @@ import static ru.anseranser.peshki.MainConfig.sideLength;
 import static ru.anseranser.peshki.model.Pawn.PawnState.BENCH;
 
 @Getter
-@EqualsAndHashCode
+@EqualsAndHashCode(of = "playerNumber")
 public class Player {
     private static final Random random = new Random();
 
     private final Integer playerNumber;
-    @EqualsAndHashCode.Exclude
     private final Board board;
     private final List<Pawn> pawns;
+    @Setter
     private Cell corner;
     @Setter
     private boolean human;
@@ -321,9 +321,5 @@ public class Player {
             if (homeCount == numberOfPawns - 1) return 1_000_000;
         }
         return 0;
-    }
-
-    public void setCorner(Cell corner) {
-        this.corner = corner;
     }
 }

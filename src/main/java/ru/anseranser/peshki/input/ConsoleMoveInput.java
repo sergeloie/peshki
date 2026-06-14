@@ -27,20 +27,13 @@ public class ConsoleMoveInput implements MoveInputService {
         System.out.println("  Used: " + usedDice);
         System.out.println("  Left:  " + remaining);
 
-        List<Player.Move> allOptions = new ArrayList<>(availableMoves);
-        allOptions.add(null);
-
         System.out.println("  Available moves:");
-        for (int i = 0; i < allOptions.size(); i++) {
-            if (allOptions.get(i) == null) {
-                System.out.println("  " + (i + 1) + ". Skip");
-            } else {
-                System.out.println("  " + (i + 1) + ". " + formatMove(allOptions.get(i)));
-            }
+        for (int i = 0; i < availableMoves.size(); i++) {
+            System.out.println("  " + (i + 1) + ". " + formatMove(availableMoves.get(i)));
         }
 
-        int choice = readNumber(1, allOptions.size());
-        return allOptions.get(choice - 1);
+        int choice = readNumber(1, availableMoves.size());
+        return availableMoves.get(choice - 1);
     }
 
     private int readNumber(int min, int max) {

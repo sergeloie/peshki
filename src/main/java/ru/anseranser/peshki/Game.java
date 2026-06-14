@@ -131,7 +131,6 @@ public class Game {
 
             Player.Move selectedMove = moveInputService.selectMove(
                     player, availableMoves, board, dice, usedDice);
-            if (selectedMove == null) break;
 
             if (selectedMove.pawn() == null) {
                 boolean placed = player.tryPlaceNewPawn();
