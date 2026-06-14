@@ -113,6 +113,8 @@ public class Game {
             for (int d : bestMove.consumedDice()) {
                 remainingDice.remove(Integer.valueOf(d));
             }
+
+            if (isGameOver()) break;
         }
 
         return kickedEnemy;
@@ -157,6 +159,8 @@ public class Game {
             for (int d : selectedMove.consumedDice()) {
                 remainingDice.remove(Integer.valueOf(d));
             }
+
+            if (isGameOver()) break;
         }
 
         return kickedEnemy;

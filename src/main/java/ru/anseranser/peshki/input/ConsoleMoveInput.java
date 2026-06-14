@@ -21,7 +21,9 @@ public class ConsoleMoveInput implements MoveInputService {
         printBoard(board);
 
         List<Integer> remaining = new ArrayList<>(allDice);
-        remaining.removeAll(usedDice);
+        for (int d : usedDice) {
+            remaining.remove(Integer.valueOf(d));
+        }
 
         System.out.println("  Dice: " + allDice);
         System.out.println("  Used: " + usedDice);
