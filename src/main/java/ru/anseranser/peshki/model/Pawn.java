@@ -19,11 +19,13 @@ public class Pawn {
     }
 
     private final Player player;
+    private final int number;
     private Cell cell;
     private PawnState state;
 
-    public Pawn(Player player) {
+    public Pawn(Player player, int number) {
         this.player = player;
+        this.number = number;
         this.state = BENCH;
     }
 

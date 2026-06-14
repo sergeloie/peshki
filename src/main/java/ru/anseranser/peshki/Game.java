@@ -1,6 +1,8 @@
 package ru.anseranser.peshki;
 
+import ru.anseranser.peshki.input.MoveInputService;
 import ru.anseranser.peshki.model.Board;
+import ru.anseranser.peshki.model.Cell;
 import ru.anseranser.peshki.model.Pawn;
 import ru.anseranser.peshki.model.Player;
 import ru.anseranser.peshki.util.RenderBoard;
@@ -15,10 +17,12 @@ public class Game {
     private static final int MAX_TURNS = 5000;
 
     private final Board board;
+    private final MoveInputService moveInputService;
     private int currentPlayerIndex = 0;
 
-    public Game() {
+    public Game(MoveInputService moveInputService) {
         this.board = new Board();
+        this.moveInputService = moveInputService;
     }
 
     public void start() {
@@ -27,7 +31,8 @@ public class Game {
         while (!isGameOver() && turnCount < MAX_TURNS) {
             turnCount++;
             Player currentPlayer = board.getPlayers().get(currentPlayerIndex);
-            System.out.println("=== Turn " + turnCount + " | Player " + currentPlayer.getPlayerNumber() + " ===");
+            System.out.println("=== Turn " + turnCount + " | Player " + currentPlayer.getPlayerNumber()
+                    + (currentPlayer.isHuman() ? " (YOU)" : " (BOT)") + " ===");
 
             boolean extraTurn = takeTurn(currentPlayer);
             String[] afterBoard = RenderBoard.renderBoard(board);
@@ -49,25 +54,66 @@ public class Game {
 
     private boolean takeTurn(Player player) {
         List<Integer> dice = player.DropDices();
-        System.out.println("  Rolled: " + dice);
+        boolean extraTurn = dice.contains(6);
+        boolean kickedEnemy;
 
-        boolean kickedEnemy = false;
-        boolean rolledSix = dice.contains(6);
+        if (player.isHuman()) {
+            kickedEnemy = takeHumanTurn(player, dice);
+        } else {
+            kickedEnemy = takeBotTurn(player, dice);
+        }
 
-        if (rolledSix && player.shouldPlacePawn(dice)) {
+        return extraTurn || kickedEnemy;
+    }
+
+    private boolean takeBotTurn(Player player, List<Integer> dice) {
+        if (dice.contains(6) && player.shouldPlacePawn(dice)) {
             boolean placed = player.tryPlaceNewPawn();
             if (placed) {
                 List<Integer> remainingDice = new ArrayList<>(dice);
                 remainingDice.remove(Integer.valueOf(6));
-                kickedEnemy = player.tryMovePawns(remainingDice);
-            } else {
-                kickedEnemy = player.tryMovePawns(dice);
+                return player.tryMovePawns(remainingDice);
             }
-        } else {
-            kickedEnemy = player.tryMovePawns(dice);
+        }
+        return player.tryMovePawns(dice);
+    }
+
+    private boolean takeHumanTurn(Player player, List<Integer> dice) {
+        boolean kickedEnemy = false;
+        List<Integer> remainingDice = new ArrayList<>(dice);
+
+        if (remainingDice.contains(6) && !player.getPawnsByState(Pawn.PawnState.BENCH).isEmpty()) {
+            boolean shouldPlace = moveInputService.askPlacePawn(player, remainingDice, board);
+            if (shouldPlace) {
+                boolean placed = player.tryPlaceNewPawn();
+                if (placed) {
+                    remainingDice.remove(Integer.valueOf(6));
+                }
+            }
         }
 
-        return rolledSix || kickedEnemy;
+        while (!remainingDice.isEmpty()) {
+            List<Player.Move> availableMoves = player.generateAllMoves(remainingDice);
+            if (availableMoves.isEmpty()) break;
+
+            Player.Move selectedMove = moveInputService.selectMove(player, availableMoves, board);
+            if (selectedMove == null) break;
+
+            Pawn pawn = selectedMove.pawn();
+            Cell target = pawn.findTargetCell(selectedMove.steps());
+
+            if (pawn.getState() != Pawn.PawnState.HOMER
+                    && target.getPawn() != null
+                    && !target.getPawn().getPlayer().equals(player)) {
+                target.getPawn().remove();
+                kickedEnemy = true;
+            }
+
+            pawn.moveTo(target);
+            remainingDice.removeAll(selectedMove.consumedDice());
+        }
+
+        return kickedEnemy;
     }
 
     private boolean isGameOver() {

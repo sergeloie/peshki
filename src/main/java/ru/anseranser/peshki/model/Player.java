@@ -2,6 +2,7 @@ package ru.anseranser.peshki.model;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -28,6 +29,8 @@ public class Player {
     private final Board board;
     private final List<Pawn> pawns;
     private Cell corner;
+    @Setter
+    private boolean human;
 
     public static record Move(Pawn pawn, int steps, List<Integer> consumedDice) {}
 
@@ -35,7 +38,7 @@ public class Player {
         this.playerNumber = playerNumber;
         this.board = board;
         this.pawns = IntStream.rangeClosed(1, numberOfPawns)
-                .mapToObj(i -> new Pawn(this))
+                .mapToObj(i -> new Pawn(this, i))
                 .toList();
     }
 
@@ -145,7 +148,7 @@ public class Player {
                 .max(Comparator.comparingInt(this::scoreMove));
     }
 
-    private List<Move> generateAllMoves(List<Integer> dice) {
+    public List<Move> generateAllMoves(List<Integer> dice) {
         List<Move> moves = new ArrayList<>();
         List<Pawn> movablePawns = getMovablePawns();
 

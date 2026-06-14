@@ -28,10 +28,12 @@ public class Board {
     }
 
     private List<Player> generatePlayers() {
-        return IntStream
+        List<Player> players = IntStream
                 .rangeClosed(1, numberOfPlayers)
                 .mapToObj(p -> new Player(p, this))
                 .toList();
+        players.get(0).setHuman(true);
+        return players;
     }
 
 
