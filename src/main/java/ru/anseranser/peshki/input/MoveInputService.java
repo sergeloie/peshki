@@ -9,4 +9,3 @@ public interface MoveInputService {
     Player.Move selectMove(Player player, List<Player.Move> availableMoves, Board board,
                             List<Integer> allDice, List<Integer> usedDice);
 }
-1
