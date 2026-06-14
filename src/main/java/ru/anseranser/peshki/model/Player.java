@@ -171,6 +171,14 @@ public class Player {
             }
         }
 
+        if (dice.contains(6) && !getPawnsByState(Pawn.PawnState.BENCH).isEmpty()) {
+            Cell cornerCell = this.corner;
+            Pawn existingPawn = cornerCell.getPawn();
+            if (existingPawn == null || !existingPawn.getPlayer().equals(this)) {
+                moves.add(new Move(null, 6, List.of(6)));
+            }
+        }
+
         return moves;
     }
 
@@ -182,6 +190,14 @@ public class Player {
     }
 
     private int scoreMove(Move move) {
+        if (move.pawn() == null) {
+            Pawn existingPawn = corner.getPawn();
+            if (existingPawn != null && !existingPawn.getPlayer().equals(this)) {
+                return 800_000;
+            }
+            return 100_000;
+        }
+
         Pawn pawn = move.pawn();
         int steps = move.steps();
         Cell target = pawn.findTargetCell(steps);

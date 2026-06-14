@@ -14,16 +14,6 @@ public class ConsoleMoveInput implements MoveInputService {
     private final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
     @Override
-    public boolean askPlacePawn(Player player, List<Integer> dice, Board board) {
-        printBoard(board);
-        System.out.println("  Rolled: " + dice);
-        System.out.println("  Place a new pawn on your corner?");
-        System.out.println("  1. Yes");
-        System.out.println("  2. No");
-        return readNumber(1, 2) == 1;
-    }
-
-    @Override
     public Player.Move selectMove(Player player, List<Player.Move> availableMoves, Board board,
                                   List<Integer> allDice, List<Integer> usedDice) {
         if (availableMoves.isEmpty()) return null;
@@ -71,6 +61,9 @@ public class ConsoleMoveInput implements MoveInputService {
     }
 
     private String formatMove(Player.Move move) {
+        if (move.pawn() == null) {
+            return "Place new pawn on corner [6]";
+        }
         Cell target = move.pawn().findTargetCell(move.steps());
         StringBuilder sb = new StringBuilder();
         sb.append("Pawn ").append(move.pawn().getPlayer().getPlayerNumber());

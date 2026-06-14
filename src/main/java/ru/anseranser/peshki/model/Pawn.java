@@ -52,9 +52,17 @@ public class Pawn {
             Cell next;
 
             if (!inHome) {
-                next = current.getNextFieldCell();
-                if (next == corner && !isLastLapPawn) {
+                if (current == corner) {
+                    if (isLastLapPawn) {
+                        return corner;
+                    }
                     inHome = true;
+                    next = current.getNextHomeCell();
+                } else {
+                    next = current.getNextFieldCell();
+                    if (next == corner && !isLastLapPawn) {
+                        inHome = true;
+                    }
                 }
             } else {
                 next = current.getNextHomeCell();
@@ -74,10 +82,6 @@ public class Pawn {
             }
 
             current = next;
-        }
-
-        if (isLastLapPawn && current == corner) {
-            return corner;
         }
 
         return current;
