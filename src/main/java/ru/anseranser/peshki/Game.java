@@ -48,16 +48,18 @@ public class Game {
         boolean kickedEnemy = false;
         boolean rolledSix = dice.contains(6);
 
-        List<Integer> moveDice = new ArrayList<>(dice);
-
-        if (rolledSix) {
+        if (rolledSix && player.shouldPlacePawn(dice)) {
             boolean placed = player.tryPlaceNewPawn();
             if (placed) {
-                moveDice.remove(Integer.valueOf(6));
+                List<Integer> remainingDice = new ArrayList<>(dice);
+                remainingDice.remove(Integer.valueOf(6));
+                kickedEnemy = player.tryMovePawns(remainingDice);
+            } else {
+                kickedEnemy = player.tryMovePawns(dice);
             }
+        } else {
+            kickedEnemy = player.tryMovePawns(dice);
         }
-
-        kickedEnemy = player.tryMovePawns(moveDice);
 
         return rolledSix || kickedEnemy;
     }
