@@ -24,10 +24,18 @@ public class ConsoleMoveInput implements MoveInputService {
     }
 
     @Override
-    public Player.Move selectMove(Player player, List<Player.Move> availableMoves, Board board) {
+    public Player.Move selectMove(Player player, List<Player.Move> availableMoves, Board board,
+                                  List<Integer> allDice, List<Integer> usedDice) {
         if (availableMoves.isEmpty()) return null;
 
         printBoard(board);
+
+        List<Integer> remaining = new ArrayList<>(allDice);
+        remaining.removeAll(usedDice);
+
+        System.out.println("  Dice: " + allDice);
+        System.out.println("  Used: " + usedDice);
+        System.out.println("  Left:  " + remaining);
 
         List<Player.Move> allOptions = new ArrayList<>(availableMoves);
         allOptions.add(null);

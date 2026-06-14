@@ -67,27 +67,79 @@ public class Game {
     }
 
     private boolean takeBotTurn(Player player, List<Integer> dice) {
+        System.out.println("  Rolled: " + dice);
+
+        boolean kickedEnemy = false;
+
         if (dice.contains(6) && player.shouldPlacePawn(dice)) {
             boolean placed = player.tryPlaceNewPawn();
             if (placed) {
+                System.out.println("  Placed new pawn on corner");
                 List<Integer> remainingDice = new ArrayList<>(dice);
                 remainingDice.remove(Integer.valueOf(6));
-                return player.tryMovePawns(remainingDice);
+                kickedEnemy = executeBotMoves(player, remainingDice);
+            } else {
+                kickedEnemy = executeBotMoves(player, dice);
             }
+        } else {
+            kickedEnemy = executeBotMoves(player, dice);
         }
-        return player.tryMovePawns(dice);
+
+        return kickedEnemy;
+    }
+
+    private boolean executeBotMoves(Player player, List<Integer> dice) {
+        boolean kickedEnemy = false;
+        List<Integer> remainingDice = new ArrayList<>(dice);
+        List<Integer> usedDice = new ArrayList<>();
+
+        while (!remainingDice.isEmpty()) {
+            List<Player.Move> availableMoves = player.generateAllMoves(remainingDice);
+            if (availableMoves.isEmpty()) break;
+
+            Player.Move bestMove = player.findBestMove(remainingDice).orElse(null);
+            if (bestMove == null) break;
+
+            Cell target = bestMove.pawn().findTargetCell(bestMove.steps());
+
+            if (bestMove.pawn().getState() != Pawn.PawnState.HOMER
+                    && target.getPawn() != null
+                    && !target.getPawn().getPlayer().equals(player)) {
+                System.out.println("  Pawn " + bestMove.pawn().getPlayer().getPlayerNumber()
+                        + "." + bestMove.pawn().getNumber()
+                        + " killed enemy pawn " + target.getPawn().getPlayer().getPlayerNumber()
+                        + "." + target.getPawn().getNumber());
+                target.getPawn().remove();
+                kickedEnemy = true;
+            } else {
+                System.out.println("  Pawn " + bestMove.pawn().getPlayer().getPlayerNumber()
+                        + "." + bestMove.pawn().getNumber()
+                        + " moved " + bestMove.steps() + " steps");
+            }
+
+            bestMove.pawn().moveTo(target);
+            usedDice.addAll(bestMove.consumedDice());
+            remainingDice.removeAll(bestMove.consumedDice());
+        }
+
+        return kickedEnemy;
     }
 
     private boolean takeHumanTurn(Player player, List<Integer> dice) {
+        System.out.println("  Rolled: " + dice);
+
         boolean kickedEnemy = false;
         List<Integer> remainingDice = new ArrayList<>(dice);
+        List<Integer> usedDice = new ArrayList<>();
 
         if (remainingDice.contains(6) && !player.getPawnsByState(Pawn.PawnState.BENCH).isEmpty()) {
             boolean shouldPlace = moveInputService.askPlacePawn(player, remainingDice, board);
             if (shouldPlace) {
                 boolean placed = player.tryPlaceNewPawn();
                 if (placed) {
+                    System.out.println("  Placed new pawn on corner");
                     remainingDice.remove(Integer.valueOf(6));
+                    usedDice.add(6);
                 }
             }
         }
@@ -96,7 +148,8 @@ public class Game {
             List<Player.Move> availableMoves = player.generateAllMoves(remainingDice);
             if (availableMoves.isEmpty()) break;
 
-            Player.Move selectedMove = moveInputService.selectMove(player, availableMoves, board);
+            Player.Move selectedMove = moveInputService.selectMove(
+                    player, availableMoves, board, dice, usedDice);
             if (selectedMove == null) break;
 
             Pawn pawn = selectedMove.pawn();
@@ -105,11 +158,14 @@ public class Game {
             if (pawn.getState() != Pawn.PawnState.HOMER
                     && target.getPawn() != null
                     && !target.getPawn().getPlayer().equals(player)) {
+                System.out.println("  Killed enemy pawn " + target.getPawn().getPlayer().getPlayerNumber()
+                        + "." + target.getPawn().getNumber());
                 target.getPawn().remove();
                 kickedEnemy = true;
             }
 
             pawn.moveTo(target);
+            usedDice.addAll(selectedMove.consumedDice());
             remainingDice.removeAll(selectedMove.consumedDice());
         }
 
