@@ -23,13 +23,18 @@ public class Game {
 
     public void start() {
         int turnCount = 0;
+        String[] beforeBoard = RenderBoard.renderBoard(board);
         while (!isGameOver() && turnCount < MAX_TURNS) {
             turnCount++;
             Player currentPlayer = board.getPlayers().get(currentPlayerIndex);
             System.out.println("=== Turn " + turnCount + " | Player " + currentPlayer.getPlayerNumber() + " ===");
+
             boolean extraTurn = takeTurn(currentPlayer);
-            RenderBoard.drawBoard(board);
+            String[] afterBoard = RenderBoard.renderBoard(board);
+
+            RenderBoard.drawBoardsSideBySide(beforeBoard, afterBoard);
             System.out.println();
+
             if (isGameOver()) {
                 System.out.println("Player " + currentPlayer.getPlayerNumber() + " wins!");
                 return;
@@ -37,6 +42,7 @@ public class Game {
             if (!extraTurn) {
                 currentPlayerIndex = (currentPlayerIndex + 1) % board.getPlayers().size();
             }
+            beforeBoard = afterBoard;
         }
         System.out.println("Game ended after " + MAX_TURNS + " turns.");
     }
