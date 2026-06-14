@@ -52,7 +52,7 @@ public class Pawn {
             Cell next;
 
             if (!inHome) {
-                if (current == corner) {
+                if (current == corner && this.state == PawnState.FIELDER) {
                     if (isLastLapPawn) {
                         return corner;
                     }
