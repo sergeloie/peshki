@@ -119,7 +119,9 @@ public class Game {
 
             bestMove.pawn().moveTo(target);
             usedDice.addAll(bestMove.consumedDice());
-            remainingDice.removeAll(bestMove.consumedDice());
+            for (int d : bestMove.consumedDice()) {
+                remainingDice.remove(Integer.valueOf(d));
+            }
         }
 
         return kickedEnemy;
@@ -166,7 +168,9 @@ public class Game {
 
             pawn.moveTo(target);
             usedDice.addAll(selectedMove.consumedDice());
-            remainingDice.removeAll(selectedMove.consumedDice());
+            for (int d : selectedMove.consumedDice()) {
+                remainingDice.remove(Integer.valueOf(d));
+            }
         }
 
         return kickedEnemy;
