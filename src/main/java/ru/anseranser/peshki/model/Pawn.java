@@ -62,6 +62,10 @@ public class Pawn {
                     next = current.getNextFieldCell();
                     if (next == corner && !isLastLapPawn) {
                         inHome = true;
+                    } else if (next == corner) {
+                        if (i < steps - 1) {
+                            return null;
+                        }
                     }
                 }
             } else {
