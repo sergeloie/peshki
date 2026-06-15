@@ -2,6 +2,7 @@ package ru.anseranser.peshki.input;
 
 import ru.anseranser.peshki.model.Board;
 import ru.anseranser.peshki.model.Cell;
+import ru.anseranser.peshki.model.Pawn;
 import ru.anseranser.peshki.model.Player;
 import ru.anseranser.peshki.util.RenderBoard;
 
@@ -9,6 +10,8 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+
+import static ru.anseranser.peshki.MainConfig.numberOfPawns;
 
 public class ConsoleMoveInput implements MoveInputService {
     private final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
@@ -31,7 +34,7 @@ public class ConsoleMoveInput implements MoveInputService {
 
         System.out.println("  Available moves:");
         for (int i = 0; i < availableMoves.size(); i++) {
-            System.out.println("  " + (i + 1) + ". " + formatMove(availableMoves.get(i)));
+                System.out.println("  " + (i + 1) + ". " + formatMove(player, availableMoves.get(i)));
         }
 
         int choice = readNumber(1, availableMoves.size());
@@ -55,12 +58,21 @@ public class ConsoleMoveInput implements MoveInputService {
         }
     }
 
-    private String formatMove(Player.Move move) {
+    private String formatMove(Player player, Player.Move move) {
         if (move.pawn() == null) {
             if (move.steps() == 0) {
                 return "Place new pawn on corner";
             }
-            return "Place new pawn + move " + move.steps() + " steps";
+            Cell target = simulateCornerMove(player, move.steps());
+            StringBuilder sb = new StringBuilder();
+            sb.append("Place new pawn + move ").append(move.steps()).append(" steps");
+            if (target != null && target.getPawn() != null) {
+                sb.append(" [KILL!]");
+            }
+            if (isWinningPlaceAndMove(player, move.steps())) {
+                sb.append(" [WIN!]");
+            }
+            return sb.toString();
         }
         Cell target = move.pawn().findTargetCell(move.steps());
         StringBuilder sb = new StringBuilder();
@@ -68,17 +80,46 @@ public class ConsoleMoveInput implements MoveInputService {
         sb.append(".").append(move.pawn().getNumber());
         sb.append(" -> ").append(move.steps()).append(" steps");
         if (target != null) {
-            if (move.pawn().getState() != ru.anseranser.peshki.model.Pawn.PawnState.HOMER
+            if (move.pawn().getState() != Pawn.PawnState.HOMER
                     && target.getPawn() != null
                     && !target.getPawn().getPlayer().equals(move.pawn().getPlayer())) {
                 sb.append(" [KILL!]");
             }
-            if (move.pawn().getState() == ru.anseranser.peshki.model.Pawn.PawnState.FIELDER
+            if (move.pawn().getState() == Pawn.PawnState.FIELDER
                     && target.getCellType() == Cell.CellType.HOME) {
                 sb.append(" [HOME!]");
             }
+            if (isWinningMove(move.pawn(), target)) {
+                sb.append(" [WIN!]");
+            }
         }
         return sb.toString();
+    }
+
+    private boolean isWinningMove(Pawn pawn, Cell target) {
+        if (target == null || pawn.getState() == Pawn.PawnState.HOMER) return false;
+        if (target != pawn.getPlayer().getCorner()) return false;
+        return pawn.getPlayer().getPawns().stream()
+                .filter(p -> p != pawn && p.getState() == Pawn.PawnState.HOMER)
+                .count() == numberOfPawns - 1;
+    }
+
+    private boolean isWinningPlaceAndMove(Player player, int steps) {
+        Cell target = simulateCornerMove(player, steps);
+        if (target == null || target != player.getCorner()) return false;
+        return player.getPawns().stream()
+                .filter(p -> p.getState() == Pawn.PawnState.HOMER)
+                .count() == numberOfPawns - 1;
+    }
+
+    private Cell simulateCornerMove(Player player, int steps) {
+        Cell current = player.getCorner();
+        for (int i = 0; i < steps; i++) {
+            Cell next = current.getNextFieldCell();
+            if (next == null) return null;
+            current = next;
+        }
+        return current;
     }
 
     private void printBoard(Board board) {
