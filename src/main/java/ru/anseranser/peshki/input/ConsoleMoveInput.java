@@ -59,41 +59,59 @@ public class ConsoleMoveInput implements MoveInputService {
     }
 
     private String formatMove(Player player, Player.Move move) {
+        StringBuilder sb = new StringBuilder();
+
         if (move.pawn() == null) {
             if (move.steps() == 0) {
-                return "Place new pawn on corner";
+                sb.append("Place new pawn on corner");
+                if (isKillingPlace(player)) {
+                    sb.append(" [KILL!]");
+                }
+            } else {
+                sb.append("Place new pawn + move ").append(move.steps()).append(" steps");
+                Cell target = simulateCornerMove(player, move.steps());
+                if (isKillingTarget(player, target)) {
+                    sb.append(" [KILL!]");
+                }
+                if (isWinningPlaceAndMove(player, move.steps())) {
+                    sb.append(" [WIN!]");
+                }
             }
-            Cell target = simulateCornerMove(player, move.steps());
-            StringBuilder sb = new StringBuilder();
-            sb.append("Place new pawn + move ").append(move.steps()).append(" steps");
-            if (target != null && target.getPawn() != null) {
-                sb.append(" [KILL!]");
-            }
-            if (isWinningPlaceAndMove(player, move.steps())) {
-                sb.append(" [WIN!]");
-            }
-            return sb.toString();
-        }
-        Cell target = move.pawn().findTargetCell(move.steps());
-        StringBuilder sb = new StringBuilder();
-        sb.append("Pawn ").append(move.pawn().getPlayer().getPlayerNumber());
-        sb.append(".").append(move.pawn().getNumber());
-        sb.append(" -> ").append(move.steps()).append(" steps");
-        if (target != null) {
-            if (move.pawn().getState() != Pawn.PawnState.HOMER
-                    && target.getPawn() != null
-                    && !target.getPawn().getPlayer().equals(move.pawn().getPlayer())) {
-                sb.append(" [KILL!]");
-            }
-            if (move.pawn().getState() == Pawn.PawnState.FIELDER
-                    && target.getCellType() == Cell.CellType.HOME) {
-                sb.append(" [HOME!]");
-            }
-            if (isWinningMove(move.pawn(), target)) {
-                sb.append(" [WIN!]");
+        } else {
+            Cell target = move.pawn().findTargetCell(move.steps());
+            sb.append("Pawn ").append(move.pawn().getPlayer().getPlayerNumber());
+            sb.append(".").append(move.pawn().getNumber());
+            sb.append(" -> ").append(move.steps()).append(" steps");
+            if (target != null) {
+                if (isKillingTarget(move.pawn(), target)) {
+                    sb.append(" [KILL!]");
+                }
+                if (move.pawn().getState() == Pawn.PawnState.FIELDER
+                        && target.getCellType() == Cell.CellType.HOME) {
+                    sb.append(" [HOME!]");
+                }
+                if (isWinningMove(move.pawn(), target)) {
+                    sb.append(" [WIN!]");
+                }
             }
         }
         return sb.toString();
+    }
+
+    private boolean isKillingPlace(Player player) {
+        Cell cornerCell = player.getCorner();
+        return cornerCell.getPawn() != null && !cornerCell.getPawn().getPlayer().equals(player);
+    }
+
+    private boolean isKillingTarget(Pawn pawn, Cell target) {
+        return target != null
+                && pawn.getState() != Pawn.PawnState.HOMER
+                && target.getPawn() != null
+                && !target.getPawn().getPlayer().equals(pawn.getPlayer());
+    }
+
+    private boolean isKillingTarget(Player player, Cell target) {
+        return target != null && target.getPawn() != null && !target.getPawn().getPlayer().equals(player);
     }
 
     private boolean isWinningMove(Pawn pawn, Cell target) {
