@@ -57,7 +57,10 @@ public class ConsoleMoveInput implements MoveInputService {
 
     private String formatMove(Player.Move move) {
         if (move.pawn() == null) {
-            return "Place new pawn on corner [6]";
+            if (move.steps() == 0) {
+                return "Place new pawn on corner";
+            }
+            return "Place new pawn + move " + move.steps() + " steps";
         }
         Cell target = move.pawn().findTargetCell(move.steps());
         StringBuilder sb = new StringBuilder();

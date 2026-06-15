@@ -86,7 +86,28 @@ public class Game {
             if (bestMove.pawn() == null) {
                 boolean placed = player.tryPlaceNewPawn();
                 if (placed) {
-                    System.out.println("  Placed new pawn on corner");
+                    if (bestMove.steps() == 0) {
+                        System.out.println("  Placed new pawn on corner");
+                    } else {
+                        Pawn newPawn = player.getPawnsByState(Pawn.PawnState.NEWBORN)
+                                .stream().filter(p -> p.getCell() != null && p.getCell() == board.getCorner(player))
+                                .findFirst().orElse(null);
+                        if (newPawn != null) {
+                            Cell target = newPawn.findTargetCell(bestMove.steps());
+                            if (target != null) {
+                                if (target.getPawn() != null && !target.getPawn().getPlayer().equals(player)) {
+                                    System.out.println("  Placed new pawn + killed enemy pawn "
+                                            + target.getPawn().getPlayer().getPlayerNumber()
+                                            + "." + target.getPawn().getNumber());
+                                    target.getPawn().remove();
+                                    kickedEnemy = true;
+                                } else {
+                                    System.out.println("  Placed new pawn + moved " + bestMove.steps() + " steps");
+                                }
+                                newPawn.moveTo(target);
+                            }
+                        }
+                    }
                 }
             } else {
                 Cell target = bestMove.pawn().findTargetCell(bestMove.steps());
@@ -137,7 +158,28 @@ public class Game {
             if (selectedMove.pawn() == null) {
                 boolean placed = player.tryPlaceNewPawn();
                 if (placed) {
-                    System.out.println("  Placed new pawn on corner");
+                    if (selectedMove.steps() == 0) {
+                        System.out.println("  Placed new pawn on corner");
+                    } else {
+                        Pawn newPawn = player.getPawnsByState(Pawn.PawnState.NEWBORN)
+                                .stream().filter(p -> p.getCell() != null && p.getCell() == board.getCorner(player))
+                                .findFirst().orElse(null);
+                        if (newPawn != null) {
+                            Cell target = newPawn.findTargetCell(selectedMove.steps());
+                            if (target != null) {
+                                if (target.getPawn() != null && !target.getPawn().getPlayer().equals(player)) {
+                                    System.out.println("  Placed new pawn + killed enemy pawn "
+                                            + target.getPawn().getPlayer().getPlayerNumber()
+                                            + "." + target.getPawn().getNumber());
+                                    target.getPawn().remove();
+                                    kickedEnemy = true;
+                                } else {
+                                    System.out.println("  Placed new pawn + moved " + selectedMove.steps() + " steps");
+                                }
+                                newPawn.moveTo(target);
+                            }
+                        }
+                    }
                 }
             } else {
                 Pawn pawn = selectedMove.pawn();

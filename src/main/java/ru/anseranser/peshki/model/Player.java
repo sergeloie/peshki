@@ -175,7 +175,18 @@ public class Player {
             Cell cornerCell = this.corner;
             Pawn existingPawn = cornerCell.getPawn();
             if (existingPawn == null || !existingPawn.getPlayer().equals(this)) {
-                moves.add(new Move(null, 6, List.of(6)));
+                moves.add(new Move(null, 0, List.of(6)));
+
+                List<Integer> otherDice = new ArrayList<>(dice);
+                otherDice.remove(Integer.valueOf(6));
+                for (int dieValue : otherDice) {
+                    if (canPlaceAndMove(dieValue)) {
+                        List<Integer> consumed = new ArrayList<>();
+                        consumed.add(6);
+                        consumed.add(dieValue);
+                        moves.add(new Move(null, dieValue, consumed));
+                    }
+                }
             }
         }
 
@@ -189,13 +200,38 @@ public class Player {
                 Pawn.PawnState.HOMER);
     }
 
+    private boolean canPlaceAndMove(int steps) {
+        Cell current = this.corner;
+        for (int i = 0; i < steps; i++) {
+            Cell next = current.getNextFieldCell();
+            if (next == null) return false;
+            if (i < steps - 1 && next.getPawn() != null) return false;
+            if (i == steps - 1 && next.getPawn() != null
+                    && next.getPawn().getPlayer().equals(this)) return false;
+            current = next;
+        }
+        return true;
+    }
+
     private int scoreMove(Move move) {
         if (move.pawn() == null) {
-            Pawn existingPawn = corner.getPawn();
-            if (existingPawn != null && !existingPawn.getPlayer().equals(this)) {
-                return 800_000;
+            if (move.steps() == 0) {
+                Pawn existingPawn = corner.getPawn();
+                if (existingPawn != null && !existingPawn.getPlayer().equals(this)) {
+                    return 800_000;
+                }
+                return 100_000;
             }
-            return 100_000;
+
+            Cell current = this.corner;
+            for (int i = 0; i < move.steps(); i++) {
+                current = current.getNextFieldCell();
+            }
+            int baseScore = 100_000;
+            if (current.getPawn() != null && !current.getPawn().getPlayer().equals(this)) {
+                baseScore = 800_000;
+            }
+            return baseScore + move.steps();
         }
 
         Pawn pawn = move.pawn();
