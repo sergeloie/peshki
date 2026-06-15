@@ -42,6 +42,7 @@ public class Main {
             }
 
             if (engine.isGameOver()) {
+                output.onBoard(engine.getBoard());
                 Player winner = engine.getBoard().getPlayers().get(engine.getCurrentPlayerIndex());
                 output.onGameWon(winner.getNumber());
                 return;
