@@ -19,7 +19,7 @@ public class Pawn {
     }
 
     private final Player player;
-    private final int number;
+    private int number;
     private Cell cell;
     private PawnState state;
 

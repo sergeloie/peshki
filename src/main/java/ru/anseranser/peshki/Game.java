@@ -30,6 +30,9 @@ public class Game {
         String[] beforeBoard = RenderBoard.renderBoard(board);
         while (!isGameOver() && turnCount < MAX_TURNS) {
             turnCount++;
+            for (Player p : board.getPlayers()) {
+                p.renumber();
+            }
             Player currentPlayer = board.getPlayers().get(currentPlayerIndex);
             System.out.println("=== Turn " + turnCount + " | Player " + currentPlayer.getPlayerNumber()
                     + (currentPlayer.isHuman() ? " (YOU)" : " (BOT)") + " ===");

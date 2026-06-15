@@ -358,4 +358,45 @@ public class Player {
         }
         return 0;
     }
+
+    public void renumber() {
+        List<Pawn> sorted = pawns.stream()
+                .sorted(Comparator.comparingInt(this::getProgress).reversed())
+                .toList();
+        for (int i = 0; i < sorted.size(); i++) {
+            sorted.get(i).setNumber(i + 1);
+        }
+    }
+
+    private int getProgress(Pawn pawn) {
+        return switch (pawn.getState()) {
+            case HOMER -> 1000 + getHomePosition(pawn);
+            case FIELDER -> getFieldPosition(pawn);
+            case NEWBORN -> -1;
+            case BENCH -> -2;
+        };
+    }
+
+    private int getFieldPosition(Pawn pawn) {
+        Cell current = corner.getNextFieldCell();
+        int position = 0;
+        int maxSteps = numberOfPlayers * (sideLength - 2);
+        while (current != corner && position < maxSteps) {
+            if (current == pawn.getCell()) return position;
+            current = current.getNextFieldCell();
+            position++;
+        }
+        return -1;
+    }
+
+    private int getHomePosition(Pawn pawn) {
+        Cell current = corner.getNextHomeCell();
+        int position = 0;
+        while (current != null) {
+            if (current == pawn.getCell()) return position;
+            current = current.getNextHomeCell();
+            position++;
+        }
+        return -1;
+    }
 }
