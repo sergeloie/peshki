@@ -83,11 +83,4 @@ public class BoardRenderer {
         return COLORS[playerNum - 1] + playerNum + RESET + " ";
     }
 
-    public static void drawSideBySide(String[] before, String[] after) {
-        if (before.length == 0 || after.length == 0) return;
-        System.out.println("  BEFORE" + " ".repeat(22) + "AFTER");
-        for (int i = 0; i < Math.min(before.length, after.length); i++) {
-            System.out.println("  " + before[i] + "    " + after[i]);
-        }
-    }
 }

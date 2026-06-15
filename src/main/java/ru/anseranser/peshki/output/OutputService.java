@@ -11,7 +11,8 @@ public interface OutputService {
     void onEvents(List<GameEvent> events);
     void onGameWon(int playerNumber);
     void onBoard(Board board);
-    void onBoardBeforeAfter(Board before, Board after);
+    String[] snapshotBoard(Board board);
+    void onBoardBeforeAfter(String[] beforeLines, String[] afterLines);
     void onTurnHeader(int turnNumber, int playerNumber, boolean isHuman);
     void onGameEnded(int maxTurns);
 }

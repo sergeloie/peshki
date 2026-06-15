@@ -149,7 +149,7 @@ public class GameEngine {
 
             MoveCommand cmd = input.getMove(player, availableMoves, board, currentDice, usedDice, config);
 
-            Board beforeBoard = board;
+            String[] beforeLines = output.snapshotBoard(board);
             List<GameEvent> events = executeHumanCommand(cmd, usedDice);
             output.onEvents(events);
 
@@ -160,7 +160,7 @@ public class GameEngine {
             updateRemainingDice(remainingDice, usedDice, cmd);
 
             if (!remainingDice.isEmpty() && !isGameOver()) {
-                output.onBoardBeforeAfter(beforeBoard, board);
+                output.onBoardBeforeAfter(beforeLines, output.snapshotBoard(board));
             }
 
             if (isGameOver()) break;

@@ -5,6 +5,7 @@ import ru.anseranser.peshki.engine.GameEngine;
 import ru.anseranser.peshki.engine.Player;
 import ru.anseranser.peshki.engine.event.GameEvent;
 import ru.anseranser.peshki.ui.console.ConsoleInput;
+import ru.anseranser.peshki.output.OutputService;
 import ru.anseranser.peshki.ui.console.ConsoleOutput;
 
 import java.util.List;
@@ -14,7 +15,7 @@ public class Main {
     public static void main(String[] args) {
         GameConfig config = GameConfig.DEFAULT;
         GameEngine engine = new GameEngine(config);
-        ConsoleOutput output = new ConsoleOutput();
+        OutputService output = new ConsoleOutput();
         ConsoleInput input = new ConsoleInput();
 
         int turnCount = 0;
@@ -32,11 +33,12 @@ public class Main {
             if (currentPlayer.isHuman()) {
                 extraTurn = engine.executeHumanTurn(input, output);
             } else {
+                String[] beforeLines = output.snapshotBoard(engine.getBoard());
                 List<GameEvent> events = engine.executeBotTurn();
                 output.onEvents(events);
                 extraTurn = events.stream().anyMatch(e ->
                         e instanceof GameEvent.TurnEnded te && te.extraTurn());
-                output.onBoard(engine.getBoard());
+                output.onBoardBeforeAfter(beforeLines, output.snapshotBoard(engine.getBoard()));
             }
 
             if (engine.isGameOver()) {

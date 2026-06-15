@@ -33,7 +33,7 @@ public class Pawn {
             if (!inHome) {
                 if (current == corner && this.state == State.FIELDER) {
                     if (isLastLapPawn) {
-                        return corner;
+                        return i == steps - 1 ? corner : null;
                     }
                     inHome = true;
                     next = current.getNextHomeCell();

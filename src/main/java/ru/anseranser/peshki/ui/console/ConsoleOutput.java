@@ -52,9 +52,12 @@ public class ConsoleOutput implements OutputService {
     }
 
     @Override
-    public void onBoardBeforeAfter(Board before, Board after) {
-        String[] beforeLines = BoardRenderer.render(before);
-        String[] afterLines = BoardRenderer.render(after);
+    public String[] snapshotBoard(Board board) {
+        return BoardRenderer.render(board);
+    }
+
+    @Override
+    public void onBoardBeforeAfter(String[] beforeLines, String[] afterLines) {
         System.out.println("  BEFORE" + " ".repeat(22) + "AFTER");
         for (int i = 0; i < Math.min(beforeLines.length, afterLines.length); i++) {
             System.out.println("  " + beforeLines[i] + "    " + afterLines[i]);
