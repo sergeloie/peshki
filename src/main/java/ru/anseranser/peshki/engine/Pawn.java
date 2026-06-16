@@ -39,7 +39,10 @@ public class Pawn {
                     next = current.getNextHomeCell();
                 } else {
                     next = current.getNextFieldCell();
-                    if (next == corner && !isLastLapPawn) {
+                    if (next == corner) {
+                        if (isLastLapPawn) {
+                            return i == steps - 1 ? corner : null;
+                        }
                         inHome = true;
                     }
                 }

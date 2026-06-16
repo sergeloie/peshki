@@ -223,4 +223,46 @@ class PawnTest {
         pawn.setNumber(3);
         assertEquals(3, pawn.getNumber());
     }
+
+    @Test
+    void lastLapPawnWinsWithExactSteps() {
+        // Place 3 pawns as HOMER
+        for (int i = 1; i < player1.getPawns().size(); i++) {
+            Pawn p = player1.getPawns().get(i);
+            Cell home = board.getCorner(player1).getNextHomeCell();
+            for (int j = 0; j < i && home.getNextHomeCell() != null; j++) {
+                home = home.getNextHomeCell();
+            }
+            p.setCell(home);
+            p.setState(Pawn.State.HOMER);
+            home.setPawn(p);
+        }
+
+        Pawn lastPawn = player1.getPawns().getFirst();
+        Cell ownCorner = board.getCorner(player1);
+
+        // Walk forward from corner to find cell exactly 7 steps before corner
+        // The field ring has 28 cells (4 corners + 24 field cells).
+        // Walking 21 steps from corner puts us 7 steps before returning.
+        Cell pos = ownCorner;
+        for (int i = 0; i < 21; i++) {
+            pos = pos.getNextFieldCell();
+        }
+        lastPawn.setCell(pos);
+        lastPawn.setState(Pawn.State.FIELDER);
+        pos.setPawn(lastPawn);
+
+        // Exactly 7 steps reaches corner
+        Cell target7 = lastPawn.findTargetCell(7, config);
+        assertEquals(ownCorner, target7);
+
+        // 8 steps overshoots — should be null
+        Cell target8 = lastPawn.findTargetCell(8, config);
+        assertNull(target8);
+
+        // 6 steps doesn't reach corner
+        Cell target6 = lastPawn.findTargetCell(6, config);
+        assertNotNull(target6);
+        assertNotEquals(ownCorner, target6);
+    }
 }
