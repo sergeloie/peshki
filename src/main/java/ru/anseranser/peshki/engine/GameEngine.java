@@ -2,9 +2,7 @@ package ru.anseranser.peshki.engine;
 
 import ru.anseranser.peshki.ai.BotStrategy;
 import ru.anseranser.peshki.engine.event.GameEvent;
-import ru.anseranser.peshki.input.InputService;
 import ru.anseranser.peshki.input.MoveCommand;
-import ru.anseranser.peshki.output.OutputService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,33 +64,6 @@ public class GameEngine {
         return lastPawn.getCell() == board.getCorner(player);
     }
 
-    public List<GameEvent> startTurn(InputService inputService) {
-        if (turnNumber >= config.maxTurns()) return List.of();
-
-        turnNumber++;
-        List<GameEvent> events = new ArrayList<>();
-
-        Player player = board.getPlayers().get(currentPlayerIndex);
-        List<Integer> dice = player.rollDice(config);
-        currentDice = dice;
-        events.add(new GameEvent.DiceRolled(player.getNumber(), dice));
-
-        boolean extraTurn = executeTurn(player, dice, events, inputService);
-
-        renumberAll();
-
-        events.add(new GameEvent.TurnEnded(player.getNumber(), extraTurn));
-
-        if (isGameOver()) {
-            events.add(new GameEvent.GameWon(player.getNumber()));
-        } else if (!extraTurn) {
-            currentPlayerIndex = (currentPlayerIndex + 1) % board.getPlayers().size();
-        }
-
-        eventLog.addAll(events);
-        return events;
-    }
-
     public List<GameEvent> executeBotTurn() {
         if (turnNumber >= config.maxTurns()) return List.of();
 
@@ -118,6 +89,10 @@ public class GameEngine {
         return events;
     }
 
+    public void incrementTurn() {
+        turnNumber++;
+    }
+
     public List<GameEvent> executeHumanCommand(MoveCommand command, List<Integer> usedDice) {
         List<GameEvent> events = new ArrayList<>();
         Player player = board.getPlayers().get(currentPlayerIndex);
@@ -135,98 +110,12 @@ public class GameEngine {
         return events;
     }
 
-    public boolean executeHumanTurn(InputService input, OutputService output) {
-        List<Integer> usedDice = new ArrayList<>();
-        List<Integer> remainingDice = new ArrayList<>(currentDice);
-        boolean extraTurn = currentDice.contains(6);
-
-        output.onBoard(board);
-
-        while (!remainingDice.isEmpty()) {
-            Player player = board.getPlayers().get(currentPlayerIndex);
-            List<Move> availableMoves = generateAllMoves(player, remainingDice, board, config);
-            if (availableMoves.isEmpty()) break;
-
-            MoveCommand cmd = input.getMove(player, availableMoves, board, currentDice, usedDice, config);
-
-            String[] beforeLines = output.snapshotBoard(board);
-            List<GameEvent> events = executeHumanCommand(cmd, usedDice);
-            output.onEvents(events);
-
-            for (GameEvent e : events) {
-                if (e instanceof GameEvent.PawnKilled) extraTurn = true;
-            }
-
-            updateRemainingDice(remainingDice, usedDice, cmd);
-
-            if (!remainingDice.isEmpty() && !isGameOver()) {
-                output.onBoardBeforeAfter(beforeLines, output.snapshotBoard(board));
-            }
-
-            if (isGameOver()) break;
-        }
-
-        advancePlayer(extraTurn);
-        return extraTurn;
-    }
-
     private int findNewbornPawnNumber(Player player) {
         return player.getPawns().stream()
                 .filter(p -> p.getState() == Pawn.State.NEWBORN && p.getCell() == board.getCorner(player))
                 .findFirst()
                 .map(Pawn::getNumber)
                 .orElse(1);
-    }
-
-    private boolean executeTurn(Player player, List<Integer> dice, List<GameEvent> events, InputService inputService) {
-        boolean kickedEnemy = false;
-        List<Integer> remainingDice = new ArrayList<>(dice);
-        List<Integer> usedDice = new ArrayList<>();
-
-        while (!remainingDice.isEmpty()) {
-            List<Move> availableMoves = generateAllMoves(player, remainingDice, board, config);
-            if (availableMoves.isEmpty()) break;
-
-            MoveCommand cmd = inputService.getMove(player, availableMoves, board, dice, usedDice, config);
-            if (cmd == null) break;
-
-            List<GameEvent> moveEvents = executeCommand(player, cmd, remainingDice);
-            events.addAll(moveEvents);
-
-            for (GameEvent e : moveEvents) {
-                if (e instanceof GameEvent.PawnKilled) kickedEnemy = true;
-            }
-
-            for (GameEvent e : moveEvents) {
-                if (e instanceof GameEvent.PawnPlaced || e instanceof GameEvent.PawnMoved) {
-                    // extract consumed dice from command
-                }
-            }
-
-            // Update remaining dice based on command
-            updateRemainingDice(remainingDice, usedDice, cmd);
-
-            if (isGameOver()) break;
-        }
-
-        return kickedEnemy || dice.contains(6);
-    }
-
-    private List<GameEvent> executeCommand(Player player, MoveCommand command, List<Integer> remainingDice) {
-        List<GameEvent> events = new ArrayList<>();
-
-        switch (command) {
-            case MoveCommand.PlacePawn c -> executePlacePawn(player, c.diceValue(), events);
-            case MoveCommand.MovePawn c -> executeMovePawn(player, c.pawnNumber(), c.steps(), events);
-            case MoveCommand.PlaceAndMove c -> {
-                executePlacePawn(player, c.placeDice(), events);
-                int newbornNum = findNewbornPawnNumber(player);
-                executeMovePawn(player, newbornNum, c.moveDice(), events);
-            }
-            
-        }
-
-        return events;
     }
 
     private void executePlacePawn(Player player, int diceValue, List<GameEvent> events) {
@@ -385,28 +274,6 @@ public class GameEngine {
             current = next;
         }
         return true;
-    }
-
-    private void updateRemainingDice(List<Integer> remainingDice, List<Integer> usedDice, MoveCommand command) {
-        switch (command) {
-            case MoveCommand.PlacePawn c -> {
-                remainingDice.remove(Integer.valueOf(c.diceValue()));
-                usedDice.add(c.diceValue());
-            }
-            case MoveCommand.MovePawn c -> {
-                for (int d : c.consumedDice()) {
-                    remainingDice.remove(Integer.valueOf(d));
-                    usedDice.add(d);
-                }
-            }
-            case MoveCommand.PlaceAndMove c -> {
-                remainingDice.remove(Integer.valueOf(c.placeDice()));
-                remainingDice.remove(Integer.valueOf(c.moveDice()));
-                usedDice.add(c.placeDice());
-                usedDice.add(c.moveDice());
-            }
-            
-        }
     }
 
     private void renumberAll() {

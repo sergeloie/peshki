@@ -9,10 +9,6 @@ import java.util.List;
 public class ConsoleOutput implements OutputService {
 
     @Override
-    public void onGameState(GameState state) {
-    }
-
-    @Override
     public void onEvents(List<GameEvent> events) {
         for (GameEvent event : events) {
             switch (event) {

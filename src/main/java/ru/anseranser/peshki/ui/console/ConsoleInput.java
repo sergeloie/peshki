@@ -24,7 +24,7 @@ public class ConsoleInput implements InputService {
         System.out.println("  Available moves:");
 
         for (int i = 0; i < availableMoves.size(); i++) {
-            System.out.println("  " + (i + 1) + ". " + formatMove(player, availableMoves.get(i), board));
+            System.out.println("  " + (i + 1) + ". " + formatMove(player, availableMoves.get(i), board, config));
         }
 
         int choice = readNumber(1, availableMoves.size());
@@ -42,8 +42,7 @@ public class ConsoleInput implements InputService {
         }
     }
 
-    private String formatMove(Player player, Move move, Board board) {
-        GameConfig config = new GameConfig(8, 4, 4, 2, 6, 5000);
+    private String formatMove(Player player, Move move, Board board, GameConfig config) {
         if (move.pawn() == null) {
             if (move.steps() == 0) {
                 String kill = isKillingPlace(player) ? " [KILL!]" : "";
@@ -68,7 +67,7 @@ public class ConsoleInput implements InputService {
                     && target.getCellType() == Cell.CellType.HOME) {
                 sb.append(" [HOME!]");
             }
-            if (isWinningMove(move.pawn(), target)) {
+            if (isWinningMove(move.pawn(), target, config)) {
                 sb.append(" [WIN!]");
             }
         }
@@ -80,12 +79,12 @@ public class ConsoleInput implements InputService {
         return corner.getPawn() != null && !corner.getPawn().getPlayer().equals(player);
     }
 
-    private boolean isWinningMove(Pawn pawn, Cell target) {
+    private boolean isWinningMove(Pawn pawn, Cell target, GameConfig config) {
         if (target == null || pawn.getState() == Pawn.State.HOMER) return false;
         if (target != pawn.getPlayer().getCorner()) return false;
         return pawn.getPlayer().getPawns().stream()
                 .filter(p -> p != pawn && p.getState() == Pawn.State.HOMER)
-                .count() == 3;
+                .count() == config.numberOfPawns() - 1;
     }
 
     private Cell simulateCornerMove(Player player, int steps) {
