@@ -27,14 +27,24 @@
 
 ## Архитектура
 
-### Слои
+### Java-версия (консоль)
 ```
-engine/          — чистая логика игры (БЕЗ зависимостей от I/O)
-ai/              — стратегия бота (BotStrategy)
-input/           — интерфейс InputService + sealed MoveCommand
-output/          — интерфейс OutputService
-ui/console/      — консольная реализация (ConsoleInput, ConsoleOutput, BoardRenderer)
-Main.java        — контроллер (оркестрирует движок + ввод/вывод)
+src/main/java/
+  engine/          — чистая логика игры (БЕЗ зависимостей от I/O)
+  ai/              — стратегия бота (BotStrategy)
+  input/           — интерфейс InputService + sealed MoveCommand
+  output/          — интерфейс OutputService
+  ui/console/      — консольная реализация (ConsoleInput, ConsoleOutput, BoardRenderer)
+  Main.java        — контроллер (оркестрирует движок + ввод/вывод)
+```
+
+### Web-версия (TypeScript + Canvas)
+```
+web/src/
+  engine/          — портированный движок (TypeScript)
+  ai/              — стратегия бота
+  ui/              — Canvas рендерер + GameUI
+  Main.ts          — точка входа
 ```
 
 ### Ключевые файлы
@@ -58,3 +68,9 @@ Main.java        — контроллер (оркестрирует движок
 - `GameConfig` передаётся параметром, не создаётся хардкодом (кроме константы DEFAULT)
 - Не удалять методы/классы без проверки, что они нигде не используются
 - Не менять сигнатуры публичных методов в `engine/` без обновления всех вызывающих сторон
+
+### Web-версия
+- Запуск: `cd web && npm run dev`
+- Тесты: `cd web && npm test`
+- Сборка: `cd web && npm run build`
+- Движок портирован 1:1 с Java-версии
