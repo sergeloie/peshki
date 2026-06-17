@@ -5,12 +5,12 @@ import { Pawn, PawnState } from '../engine/Pawn';
 import type { Player } from '../engine/Player';
 import type { Move } from '../engine/Move';
 import { MoveCommand } from '../engine/MoveCommand';
-import { CanvasRenderer } from './CanvasRenderer';
+import { ThreeRenderer } from './ThreeRenderer';
 import { BotStrategy } from '../ai/BotStrategy';
 
 export class GameUI {
   private readonly engine: GameEngine;
-  private readonly renderer: CanvasRenderer;
+  private readonly renderer: ThreeRenderer;
   private readonly panel: HTMLElement;
   private readonly botStrategy = new BotStrategy();
 
@@ -24,7 +24,7 @@ export class GameUI {
 
   constructor(engine: GameEngine, canvas: HTMLCanvasElement, panel: HTMLElement) {
     this.engine = engine;
-    this.renderer = new CanvasRenderer(canvas);
+    this.renderer = new ThreeRenderer(canvas);
     this.panel = panel;
 
     canvas.addEventListener('click', (e) => this.handleClick(e));
@@ -47,6 +47,7 @@ export class GameUI {
       ? this.getValidTargets(this.selectedPawn)
       : [];
     this.renderer.render(this.engine.board, this.selectedPawn, validTargets);
+    this.renderer.animate();
   }
 
   private getValidTargets(pawn: Pawn): Cell[] {
@@ -407,11 +408,7 @@ export class GameUI {
     const player = this.engine.board.players[this.engine.currentPlayerIndex];
     if (!player.isHuman) return;
 
-    const rect = this.renderer['canvas'].getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (this.renderer['canvas'].width / rect.width);
-    const y = (e.clientY - rect.top) * (this.renderer['canvas'].height / rect.height);
-
-    const cell = (this.renderer as any).getCellAt(x, y, this.engine.board);
+    const cell = this.renderer.getCellAt(e.clientX, e.clientY, this.engine.board);
     if (!cell) return;
 
     if (cell.pawn && cell.pawn.player === player && cell.pawn.state !== PawnState.BENCH) {

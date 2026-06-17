@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -5,13 +7,14 @@
 }
 
 body {
-  font-family: sans-serif;
-  background: #1a1a2e;
-  color: #eee;
+  font-family: 'Nunito', sans-serif;
+  background: linear-gradient(135deg, #f5ede3 0%, #e8ddd0 100%);
+  color: #5a5046;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 #app {
@@ -22,15 +25,70 @@ body {
 }
 
 #board {
-  border: 2px solid #444;
-  border-radius: 8px;
+  border: none;
+  border-radius: 20px;
+  box-shadow:
+    0 4px 24px rgba(80, 60, 40, 0.12),
+    0 1px 4px rgba(80, 60, 40, 0.08);
   cursor: pointer;
+  transition: box-shadow 0.3s ease;
+}
+
+#board:hover {
+  box-shadow:
+    0 8px 32px rgba(80, 60, 40, 0.18),
+    0 2px 8px rgba(80, 60, 40, 0.1);
 }
 
 #panel {
   min-height: 120px;
-  background: #16213e;
-  border-radius: 8px;
-  padding: 12px;
-  width: 640px;
+  width: 800px;
+  background: rgba(250, 245, 239, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 20px;
+  padding: 16px 20px;
+  box-shadow:
+    0 8px 32px rgba(80, 60, 40, 0.1),
+    0 1px 3px rgba(80, 60, 40, 0.06);
+  border: 1px solid rgba(200, 190, 175, 0.3);
+  transition: all 0.3s ease;
+}
+
+.move-btn {
+  display: block;
+  width: 100%;
+  padding: 12px 20px;
+  margin: 6px 0;
+  background: #faf5ef;
+  color: #5a5046;
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(80, 60, 40, 0.08);
+  cursor: pointer;
+  text-align: left;
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.move-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(80, 60, 40, 0.14);
+  background: #f5ede3;
+}
+
+.move-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(80, 60, 40, 0.1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease forwards;
 }
