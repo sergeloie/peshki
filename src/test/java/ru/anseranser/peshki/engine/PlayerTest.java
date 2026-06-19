@@ -117,6 +117,26 @@ class PlayerTest {
     }
 
     @Test
+    void renumberFielderOnCornerGetsBestProgress() {
+        Cell corner = board.getCorner(player);
+        Pawn pawnOnCorner = player.getPawns().get(0);
+        pawnOnCorner.setCell(corner);
+        pawnOnCorner.setState(Pawn.State.FIELDER);
+        corner.setPawn(pawnOnCorner);
+
+        Pawn pawnOnField = player.getPawns().get(1);
+        Cell fieldCell = corner.getNextFieldCell();
+        pawnOnField.setCell(fieldCell);
+        pawnOnField.setState(Pawn.State.FIELDER);
+        fieldCell.setPawn(pawnOnField);
+
+        player.renumber();
+
+        assertEquals(1, pawnOnCorner.getNumber());
+        assertEquals(2, pawnOnField.getNumber());
+    }
+
+    @Test
     void renumberAfterMoveUpdatesNumbers() {
         Cell corner = board.getCorner(player);
         Cell cell1 = corner.getNextFieldCell();

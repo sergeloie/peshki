@@ -19,6 +19,7 @@ public class Player {
     private static final Random RANDOM = new Random();
 
     private final int number;
+    private final GameConfig config;
     private final List<Pawn> pawns;
     private Cell corner;
     @Setter
@@ -26,6 +27,7 @@ public class Player {
 
     public Player(int number, GameConfig config) {
         this.number = number;
+        this.config = config;
         this.pawns = IntStream.rangeClosed(1, config.numberOfPawns())
                 .mapToObj(i -> new Pawn(this, i))
                 .toList();
@@ -79,9 +81,9 @@ public class Player {
     }
 
     private int getFieldPosition(Pawn pawn) {
+        if (pawn.getCell() == corner) return config.fieldLength();
         Cell current = corner.getNextFieldCell();
         int pos = 0;
-        int max = 100;
         while (current != corner && pos < 100) {
             if (current == pawn.getCell()) return pos;
             current = current.getNextFieldCell();
