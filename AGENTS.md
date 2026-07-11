@@ -1,78 +1,44 @@
-# AGENTS.md — Правила игры и архитектура
+# AGENTS.md
 
-## Правила игры
+This file provides guidance to agents when working with code in this repository.
 
-### Поле
-- Кольцо: 4 угла + 24 клетки поля (6 между каждыми углами, sideLength=8)
-- Домашняя зона: 3 клетки за каждым углом (numberOfPawns - 1)
-- Пешек у игрока: 4, кубиков: 2 (значения 1-6)
+## Stack & Build
 
-### Движение
-- Пешка на поле движется по кольцу против часовой стрелки (getNextFieldCell)
-- Пешка в доме движется только вперёд по своей зоне (getNextHomeCell)
-- Кубики можно использовать по отдельности или их сумму
-- Нельзя перепрыгивать свои пешки на промежуточных клетках
-- Можно бить вражескую пешку, если при ходе пешка игрока точно попадаёт на её клетку (встаёшь на её клетку, она возвращается на bench)
-- Если при броске кубиков выпала хотя бы одна 6 или игрок срубил вражескую пешку, то он бросает кости и ходит ещё раз
+- Java 21, Gradle (Kotlin DSL `build.gradle.kts`), Lombok via `io.freefair.lombok` plugin (no manual delombok).
+- Tests: JUnit 5 (Jupiter), run with `useJUnitPlatform()`.
+- Build/run (use `gradlew.bat` on Windows):
+  - `./gradlew build` — compile + test
+  - `./gradlew run` — launch console game (`ru.anseranser.peshki.Main`)
+  - `./gradlew test` — all tests
+  - Single class: `./gradlew test --tests "ru.anseranser.peshki.engine.PawnTest"`
+  - Single method: `./gradlew test --tests "ru.anseranser.peshki.engine.PawnTest.lastLapPawnWinsWithExactSteps"`
 
-### Последняя пешка (правило победы)
-- Когда 3 пешки в доме (HOMER), 4-я — последняя на поле
-- Последняя пешка НЕ заходит в дом, а должна ТОЧНО встать на свой угол
-- **Перелёт через угол запрещён** — findTargetCell возвращает null
-- findTargetCell: при попадании на угол проверяется `i == steps - 1`
+## Code Style (discovered, not enforced by a linter)
 
-### Нумерация пешек
-- #1 = ближе к финишу, #4 = дальше всех
-- HOMER (1000+позиция) > FIELDER (0-23) > NEWBORN (-1) > BENCH (-2)
-- Переходящая нумерация: #1 ближе к финишу, #4 дальше. Перепроверять и заново вычислять нумерацию после удаления пешки с поля
+- Package root: `ru.anseranser.peshki`. Subpackages: `engine` (pure logic), `ai`, `input`, `output`, `ui.console`, `engine.event`.
+- Prefer Java 21 features: **sealed interfaces** with `record` implementations (`MoveCommand`, `GameEvent`), **records** for value types (`GameConfig`, `Move`), **switch expressions** (`switch (cmd) { case X x -> ... }`).
+- Use Lombok `@Getter`/`@Setter`/`@EqualsAndHashCode` on model classes (`Pawn`, `Cell`, `Player`). `Player` is `@EqualsAndHashCode(of = "number")` — identity is by number, not field contents.
+- Tests use static imports: `import static org.junit.jupiter.api.Assertions.*;`.
+- `GameConfig` is a record with a `DEFAULT` constant `(sideLength=8, players=4, pawns=4, dice=2, sides=6, maxTurns=5000)`. `fieldLength() = players*(sideLength-2)`, `homeLength() = pawns-1`. Pass it as a parameter; never hardcode these numbers.
 
-## Архитектура
+## Architecture
 
-### Java-версия (консоль)
-```
-src/main/java/
-  engine/          — чистая логика игры (БЕЗ зависимостей от I/O)
-  ai/              — стратегия бота (BotStrategy)
-  input/           — интерфейс InputService + sealed MoveCommand
-  output/          — интерфейс OutputService
-  ui/console/      — консольная реализация (ConsoleInput, ConsoleOutput, BoardRenderer)
-  Main.java        — контроллер (оркестрирует движок + ввод/вывод)
-```
+- `engine/` is pure game logic with **no I/O** — no `System.out`, no dependency on `InputService`/`OutputService`. All console output goes through `ConsoleOutput implements OutputService`.
+- Flow: `Main` orchestrates `GameEngine` + `InputService`/`OutputService`. Engine emits `GameEvent` records (consumed by output, not printed directly).
+- Key invariants live in: `Pawn.findTargetCell()` (movement + win check), `GameEngine.hasWon()` (last pawn must land exactly on its corner), `Player.renumber()` (recompute pawn numbers by progress after every move), `BotStrategy.scoreMove()`.
 
-### Web-версия (TypeScript + Canvas)
-```
-web/src/
-  engine/          — портированный движок (TypeScript)
-  ai/              — стратегия бота
-  ui/              — Canvas рендерер + GameUI
-  Main.ts          — точка входа
-```
+## Game-Rule Invariants (non-obvious, easy to break)
 
-### Ключевые файлы
-- `Pawn.findTargetCell()` — логика движения и проверки победы
-- `GameEngine.hasWon()` — условие победы (последняя пешка на угле)
-- `Player.renumber()` — нумерация пешек по прогрессу
-- `BotStrategy.scoreMove()` — оценка ходов бота
-- `GameEngine.generateAllMoves()` — генерация доступных ходов
+- Ring: 4 corners + 24 field cells (6 between corners). Movement is **counter-clockwise** via `nextFieldCell`; home is a linear tail via `nextHomeCell`.
+- Dice: 2 dice (1-6); may use each die separately or their sum; never the same die twice. A 6 (or any kill) grants an extra turn.
+- Cannot jump over any pawn on intermediate cells; cannot land on own pawn at the final cell; can land on (and kill) an enemy pawn.
+- **Last-pawn win rule:** when 3 pawns are HOMER, the 4th must land **exactly** on its own corner. Overshooting the corner returns `null` from `findTargetCell` (no fly-over). `i == steps-1` check at the corner enforces this.
+- Pawn numbering: #1 = closest to finish, #4 = farthest. Progress order: `HOMER (1000+pos) > FIELDER (0-23) > NEWBORN (-1) > BENCH (-2)`. `renumber()` must be re-run after any pawn leaves the field.
+- `Pawn.remove()` throws `IllegalStateException` if state is HOMER or BENCH.
 
-## Правила изменений
+## Change Checklist
 
-### Checklist перед каждым изменением
-1. Прочитать этот файл
-2. Проверить, что изменение не нарушает инварианты выше
-3. После изменений в `findTargetCell` / `hasWon` — запустить тесты на победу
-4. После изменений в `renumber` — запустить тесты нумерации
-
-### Запреты
-- Движок (`engine/`) НЕ зависит от `InputService`, `OutputService`, `System.out`
-- Весь вывод в консоль только через `ConsoleOutput implements OutputService`
-- `GameConfig` передаётся параметром, не создаётся хардкодом (кроме константы DEFAULT)
-- Не удалять методы/классы без проверки, что они нигде не используются
-- Не менять сигнатуры публичных методов в `engine/` без обновления всех вызывающих сторон
-
-### Web-версия
-- Запуск: `cd web && npm run dev`
-- Тесты: `cd web && npm test`
-- Сборка: `cd web && npm run build`
-- Движок портирован 1:1 с Java-версии
-- Визуал: Three.js 3D изометрия, остров с травой и водой, тени, деревья
+1. Read this file first.
+2. After editing `findTargetCell`/`hasWon`, run the win/last-lap tests (`PawnTest.lastLapPawnWinsWithExactSteps`, `GameEngineTest`).
+3. After editing `renumber`, run `PlayerTest`.
+4. Do not change public method signatures in `engine/` without updating all callers; do not delete classes/methods without checking usages.
