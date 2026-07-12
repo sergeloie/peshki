@@ -17,7 +17,7 @@ sealed interfaces + records for `GameEvent`/`MoveCommand`/`Move`, and Lombok). T
 foundation for a UI rework.
 
 The review found:
-- **8 correctness bugs found** (BUG-5 closed as non-issue after rules clarification; BUG-9 found and fixed during the rework; 6 of the remaining bugs violate the documented game rules and affect gameplay fairness). All are now fixed and covered by tests.
+- **9 correctness bugs found** (BUG-5 closed as non-issue after rules clarification; BUG-9 and BUG-10 found and fixed during the rework; 6 of the remaining bugs violate the documented game rules and affect gameplay fairness). All are now fixed and covered by tests.
 - **~14 architecture issues** that block a clean mobile/desktop port (hardcoded console I/O, blocking stdin, hardcoded 8x8 board + ANSI colors, no persistence, static global RNG, hardcoded AI, coupled game loop).
 - Several code-quality / maintainability problems.
 
@@ -80,6 +80,12 @@ The event is declared but never emitted. Invalid moves are currently silently dr
 **Severity:** HIGH (crash / data corruption)
 `getFieldPosition` walks the shared field ring with the bound `pos < config.fieldLength()` (24 for the default config), but the full ring from a player's own corner back to itself is `fieldLength() + numberOfPlayers()` = 28 cells. A pawn sitting on a far segment (e.g., cell 13, position 26 measured from player 3's corner) is never reached, so the method threw `IllegalStateException("Pawn ... is not on the field ring of player ...")` during `renumber()` inside `executeBotTurn`. The same flawed bound existed in `BotStrategy.calculateDistanceToHome`, producing wrong distances for far pawns.
 **Fix:** use `ringLength = config.fieldLength() + config.numberOfPlayers()` as the walk bound in both methods. Found and fixed during the rework (caught by `GameSessionIntegrationTest.fullBotGameReachesCompletionViaSession`); verified — full build passes with 66 tests.
+
+### BUG-10 — Human turn never advances the player, so bots never play
+**File:** [`Main.java:50`](src/main/java/ru/anseranser/peshki/Main.java:50)
+**Severity:** HIGH (gameplay-breaking)
+The game loop in `Main` relied on the engine to advance the current player after each turn, but the two code paths were asymmetric: the **bot** path (`GameSession.playBotTurn()` → `GameEngine.executeBotTurn()`) calls `advancePlayer(extraTurn)` internally, while the **human** path (`GameSession.submitMove()` → `GameEngine.executeHumanCommand()`) does **not** advance the player. `Main` also never advanced the player after a human turn. As a result `currentPlayerIndex` stayed at `0` forever: the human (player 1) kept taking every turn and the 3 bots were never reached — the game appeared to have only one player.
+**Fix:** after a human turn the orchestrator now calls `engine.advancePlayer(extraTurn)` (the bot branch already advances internally, so it is untouched). The loop was extracted into a package-private `Main.runGame(GameEngine, InputService, OutputService)` so it is directly testable. Covered by `MainGameLoopTest.humanTurnAdvancesSoAllPlayersIncludingBotsTakeTurns`, which drives the real loop with a deterministic dice roller and asserts all four players (human + 3 bots) take turns.
 
 ---
 
@@ -261,6 +267,7 @@ All phases 0–5 have been **executed and verified**. The final `gradlew.bat bui
 | BUG-7 | Drop unused `usedDice` param | FIXED |
 | BUG-8 | Emit `MoveRejected` | FIXED |
 | BUG-9 | Field-ring walk bound crash | FIXED (found during rework; test: `GameSessionIntegrationTest`) |
+| BUG-10 | Human turn never advances player (bots never play) | FIXED (test: `MainGameLoopTest`) |
 
 ### Architecture work delivered
 - **UI-agnostic core**: `GameState` snapshot, `BoardLayout` (coordinates from `GameConfig`), `PlayerColor` enum replacing ANSI.

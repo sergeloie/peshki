@@ -89,7 +89,11 @@ public class ConsoleInput implements InputService {
             try {
                 System.out.print(Messages.get("prompt.choose"));
                 String line = reader.readLine();
-                if (line == null) return min;
+                if (line == null) {
+                    throw new IllegalStateException(
+                            "Console input stream closed (no interactive terminal). " +
+                            "Run with an attached console, e.g. `gradlew run --no-daemon`.");
+                }
                 int num = Integer.parseInt(line.trim());
                 if (num >= min && num <= max) return num;
                 System.out.println(Messages.get("prompt.range", min, max));

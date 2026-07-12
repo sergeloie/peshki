@@ -3,6 +3,7 @@ package ru.anseranser.peshki.engine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import ru.anseranser.peshki.engine.event.GameEvent;
+import ru.anseranser.peshki.input.MoveCommand;
 
 import java.util.List;
 
@@ -113,12 +114,46 @@ class GameEngineTest {
     }
 
     @Test
-    void placeAndMoveCommandWorks() {
+    void placeCommandPlacesPawnWithoutRejection() {
         Player player = engine.getBoard().getPlayers().get(0);
-        // Give player a 6 to place
-        List<GameEvent> events = engine.executeHumanCommand(
-                new ru.anseranser.peshki.input.MoveCommand.PlacePawn(1, 6));
-        assertFalse(events.isEmpty());
+        List<GameEvent> events = engine.executeHumanCommand(new MoveCommand.PlacePawn(1, 6));
+        assertFalse(events.stream().anyMatch(e -> e instanceof GameEvent.MoveRejected),
+                "Placing a pawn must not be rejected");
         assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnPlaced));
+    }
+
+    @Test
+    void placeAndMoveCommandWorksAndMovesPawn() {
+        Player player = engine.getBoard().getPlayers().get(0);
+        List<GameEvent> events = engine.executeHumanCommand(new MoveCommand.PlaceAndMove(1, 6, 2));
+
+        assertFalse(events.stream().anyMatch(e -> e instanceof GameEvent.MoveRejected),
+                "PlaceAndMove must not be rejected");
+        assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnPlaced));
+        assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnMoved),
+                "The placed pawn must be moved after placement");
+
+        boolean hasFielder = player.getPawns().stream()
+                .anyMatch(p -> p.getState() == Pawn.State.FIELDER);
+        assertTrue(hasFielder, "Placed pawn should have advanced onto the field");
+    }
+
+    @Test
+    void plainMoveWithoutKillIsNotRejected() {
+        Player player = engine.getBoard().getPlayers().get(0);
+        engine.executeHumanCommand(new MoveCommand.PlacePawn(1, 6));
+
+        Pawn placed = player.getPawns().stream()
+                .filter(p -> p.getState() == Pawn.State.NEWBORN
+                        && p.getCell() == engine.getBoard().getCorner(player))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(placed, "A pawn should be placed on the corner");
+
+        List<GameEvent> move = engine.executeHumanCommand(
+                new MoveCommand.MovePawn(1, placed.getNumber(), 1, List.of()));
+        assertFalse(move.stream().anyMatch(e -> e instanceof GameEvent.MoveRejected),
+                "A non-killing move must not be rejected");
+        assertTrue(move.stream().anyMatch(e -> e instanceof GameEvent.PawnMoved));
     }
 }

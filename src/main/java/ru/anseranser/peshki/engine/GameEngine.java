@@ -153,20 +153,20 @@ public class GameEngine {
 
         switch (command) {
             case MoveCommand.PlacePawn c -> {
-                if (!executePlacePawn(player, c.diceValue(), events)) {
+                if (!executePlacePawn(player, c.diceValue(), events).success()) {
                     events.add(new GameEvent.MoveRejected("Cannot place pawn on corner"));
                 }
             }
             case MoveCommand.MovePawn c -> {
-                if (!executeMovePawn(player, c.pawnNumber(), c.steps(), events)) {
+                if (!executeMovePawn(player, c.pawnNumber(), c.steps(), events).success()) {
                     events.add(new GameEvent.MoveRejected(
                             "Cannot move pawn " + c.pawnNumber() + " by " + c.steps()));
                 }
             }
             case MoveCommand.PlaceAndMove c -> {
-                if (!executePlacePawn(player, c.placeDice(), events)) {
+                if (!executePlacePawn(player, c.placeDice(), events).success()) {
                     events.add(new GameEvent.MoveRejected("Cannot place pawn on corner"));
-                } else if (!executeMovePawn(player, findNewbornPawnNumber(player), c.moveDice(), events)) {
+                } else if (!executeMovePawn(player, findNewbornPawnNumber(player), c.moveDice(), events).success()) {
                     events.add(new GameEvent.MoveRejected("Cannot move placed pawn"));
                 }
             }
@@ -184,14 +184,20 @@ public class GameEngine {
                 .orElse(1);
     }
 
-    private boolean executePlacePawn(Player player, int diceValue, List<GameEvent> events) {
+    private record ExecResult(boolean success, boolean killed) {}
+
+    private ExecResult executePlacePawn(Player player, int diceValue, List<GameEvent> events) {
         Cell cornerCell = board.getCorner(player);
         Pawn existingPawn = cornerCell.getPawn();
 
-        if (existingPawn != null && existingPawn.getPlayer().equals(player)) return false;
+        if (existingPawn != null && existingPawn.getPlayer().equals(player)) {
+            return new ExecResult(false, false);
+        }
 
         List<Pawn> benchPawns = player.getPawnsByState(Pawn.State.BENCH);
-        if (benchPawns.isEmpty()) return false;
+        if (benchPawns.isEmpty()) {
+            return new ExecResult(false, false);
+        }
 
         boolean killed = false;
         if (existingPawn != null) {
@@ -207,18 +213,18 @@ public class GameEngine {
         pawn.setCell(cornerCell);
         pawn.setState(Pawn.State.NEWBORN);
         events.add(new GameEvent.PawnPlaced(player.getNumber(), pawn.getNumber(), 0));
-        return killed;
+        return new ExecResult(true, killed);
     }
 
-    private boolean executeMovePawn(Player player, int pawnNumber, int steps, List<GameEvent> events) {
+    private ExecResult executeMovePawn(Player player, int pawnNumber, int steps, List<GameEvent> events) {
         Pawn pawn = player.getPawns().stream()
                 .filter(p -> p.getNumber() == pawnNumber)
                 .findFirst()
                 .orElse(null);
-        if (pawn == null || pawn.getState() == Pawn.State.BENCH) return false;
+        if (pawn == null || pawn.getState() == Pawn.State.BENCH) return new ExecResult(false, false);
 
         Cell target = pawn.findTargetCell(steps, config);
-        if (target == null) return false;
+        if (target == null) return new ExecResult(false, false);
 
         int fromIndex = cellIndex(pawn);
         boolean killed = false;
@@ -242,7 +248,7 @@ public class GameEngine {
         if (pawn.getState() == Pawn.State.HOMER) {
             events.add(new GameEvent.EnteredHome(player.getNumber(), pawn.getNumber()));
         }
-        return killed;
+        return new ExecResult(true, killed);
     }
 
     private boolean executeBotMoves(Player player, List<Integer> dice, List<GameEvent> events) {
@@ -257,9 +263,9 @@ public class GameEngine {
             if (bestMove == null) break;
 
             if (bestMove.pawn() == null) {
-                boolean killed = executePlacePawn(player, 6, events);
+                boolean killed = executePlacePawn(player, 6, events).killed();
                 if (bestMove.consumedDice().size() == 2) {
-                    if (executeMovePawn(player, findNewbornPawnNumber(player), bestMove.steps(), events)) {
+                    if (executeMovePawn(player, findNewbornPawnNumber(player), bestMove.steps(), events).killed()) {
                         killed = true;
                     }
                 }
@@ -268,7 +274,7 @@ public class GameEngine {
                 Cell target = bestMove.pawn().findTargetCell(bestMove.steps(), config);
                 if (target == null) break;
 
-                if (executeMovePawn(player, bestMove.pawn().getNumber(), bestMove.steps(), events)) {
+                if (executeMovePawn(player, bestMove.pawn().getNumber(), bestMove.steps(), events).killed()) {
                     kickedEnemy = true;
                 }
             }

@@ -13,14 +13,31 @@ import java.util.ResourceBundle;
 public final class Messages {
 
     private static final String BASE_NAME = "messages";
-    private static volatile ResourceBundle bundle =
-            ResourceBundle.getBundle(BASE_NAME, Locale.getDefault());
+    private static final ResourceBundle.Control NO_FALLBACK =
+            ResourceBundle.Control.getNoFallbackControl(ResourceBundle.Control.FORMAT_PROPERTIES);
+    private static volatile ResourceBundle bundle = load(Locale.getDefault());
 
     private Messages() {
     }
 
     public static void setLocale(Locale locale) {
-        bundle = ResourceBundle.getBundle(BASE_NAME, locale);
+        bundle = load(locale);
+    }
+
+    /**
+     * Loads the bundle for the given locale without falling back to the JVM
+     * default locale. English is the root bundle ({@code messages.properties}),
+     * so a request for "en" maps to {@link Locale#ROOT}; otherwise the default
+     * locale (e.g. ru) would be inserted into the fallback chain and win over
+     * the English root. Unknown languages fall back to the root bundle.
+     */
+    private static ResourceBundle load(Locale locale) {
+        Locale target = "en".equals(locale.getLanguage()) ? Locale.ROOT : locale;
+        try {
+            return ResourceBundle.getBundle(BASE_NAME, target, NO_FALLBACK);
+        } catch (MissingResourceException e) {
+            return ResourceBundle.getBundle(BASE_NAME, Locale.ROOT, NO_FALLBACK);
+        }
     }
 
     public static String get(String key, Object... args) {
