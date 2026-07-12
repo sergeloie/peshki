@@ -60,7 +60,7 @@ public class Main {
                 // the bot path, which advances internally), so the orchestrator
                 // must do it here. Otherwise the human would keep playing every
                 // turn and the bots would never get a move.
-                engine.advancePlayer(extraTurn);
+                session.advancePlayer(extraTurn);
             } else {
                 String[] beforeLines = output.snapshotBoard(session.getState());
                 List<GameEvent> events = session.playBotTurn();

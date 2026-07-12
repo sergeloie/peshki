@@ -63,7 +63,14 @@ public class GameEngine {
         ).toList();
 
         boolean over = isGameOver();
-        int winner = over ? board.getPlayers().get(currentPlayerIndex).getNumber() : -1;
+        int winner = -1;
+        if (over) {
+            winner = board.getPlayers().stream()
+                    .filter(this::hasWon)
+                    .map(Player::getNumber)
+                    .findFirst()
+                    .orElse(-1);
+        }
         return new GameState(config, currentPlayerIndex, currentDice, turnNumber, over, winner, players, cells);
     }
 
@@ -86,6 +93,9 @@ public class GameEngine {
     }
 
     public void advancePlayer(boolean extraTurn) {
+        if (!isGameOver()) {
+            turnNumber++;
+        }
         if (!extraTurn && !isGameOver()) {
             currentPlayerIndex = (currentPlayerIndex + 1) % board.getPlayers().size();
         }
@@ -122,7 +132,6 @@ public class GameEngine {
     public List<GameEvent> executeBotTurn() {
         if (turnNumber >= config.maxTurns()) return List.of();
 
-        turnNumber++;
         List<GameEvent> events = new ArrayList<>();
 
         Player player = board.getPlayers().get(currentPlayerIndex);
@@ -141,10 +150,6 @@ public class GameEngine {
 
         eventLog.addAll(events);
         return events;
-    }
-
-    public void incrementTurn() {
-        turnNumber++;
     }
 
     public List<GameEvent> executeHumanCommand(MoveCommand command) {
@@ -212,7 +217,7 @@ public class GameEngine {
         cornerCell.setPawn(pawn);
         pawn.setCell(cornerCell);
         pawn.setState(Pawn.State.NEWBORN);
-        events.add(new GameEvent.PawnPlaced(player.getNumber(), pawn.getNumber(), 0));
+        events.add(new GameEvent.PawnPlaced(player.getNumber(), pawn.getNumber(), cornerCell.getIndex()));
         return new ExecResult(true, killed);
     }
 

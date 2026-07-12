@@ -86,6 +86,20 @@ public class GameSession {
         return events;
     }
 
+    /**
+     * Completes the current turn and moves to the next player (or grants an
+     * extra turn). The UI must call this after a human turn ends — the engine
+     * does not advance automatically for human moves, mirroring the bot path
+     * which advances internally. Exposing it here keeps the controller the
+     * single boundary a UI talks to (no need to reach into {@link GameEngine}).
+     *
+     * @param extraTurn true if the player earned another turn (rolled a 6 or
+     *                  made a kill); in that case the same player stays on turn
+     */
+    public void advancePlayer(boolean extraTurn) {
+        engine.advancePlayer(extraTurn);
+    }
+
     private void emit(List<GameEvent> events) {
         for (GameEvent e : events) {
             for (Consumer<GameEvent> listener : listeners) {

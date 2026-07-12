@@ -17,7 +17,8 @@ sealed interfaces + records for `GameEvent`/`MoveCommand`/`Move`, and Lombok). T
 foundation for a UI rework.
 
 The review found:
-- **9 correctness bugs found** (BUG-5 closed as non-issue after rules clarification; BUG-9 and BUG-10 found and fixed during the rework; 6 of the remaining bugs violate the documented game rules and affect gameplay fairness). All are now fixed and covered by tests.
+- **9 correctness bugs found in the first wave** (BUG-5 closed as non-issue after rules clarification; BUG-9 and BUG-10 found and fixed during the rework; 6 of the remaining bugs violate the documented game rules and affect gameplay fairness). All are now fixed and covered by tests.
+- **8 additional defects found in a second, deeper review** (BUG-11…BUG-18): 5 correctness/consistency bugs (turn counter, event cell index, dead code, controller boundary, winner detection) and 3 latent/lower-priority issues (hardcoded 4-player geometry, duplicated win logic). All correctness bugs are fixed; the latent ones are documented as non-blocking follow-ups.
 - **~14 architecture issues** that block a clean mobile/desktop port (hardcoded console I/O, blocking stdin, hardcoded 8x8 board + ANSI colors, no persistence, static global RNG, hardcoded AI, coupled game loop).
 - Several code-quality / maintainability problems.
 
@@ -86,6 +87,54 @@ The event is declared but never emitted. Invalid moves are currently silently dr
 **Severity:** HIGH (gameplay-breaking)
 The game loop in `Main` relied on the engine to advance the current player after each turn, but the two code paths were asymmetric: the **bot** path (`GameSession.playBotTurn()` → `GameEngine.executeBotTurn()`) calls `advancePlayer(extraTurn)` internally, while the **human** path (`GameSession.submitMove()` → `GameEngine.executeHumanCommand()`) does **not** advance the player. `Main` also never advanced the player after a human turn. As a result `currentPlayerIndex` stayed at `0` forever: the human (player 1) kept taking every turn and the 3 bots were never reached — the game appeared to have only one player.
 **Fix:** after a human turn the orchestrator now calls `engine.advancePlayer(extraTurn)` (the bot branch already advances internally, so it is untouched). The loop was extracted into a package-private `Main.runGame(GameEngine, InputService, OutputService)` so it is directly testable. Covered by `MainGameLoopTest.humanTurnAdvancesSoAllPlayersIncludingBotsTakeTurns`, which drives the real loop with a deterministic dice roller and asserts all four players (human + 3 bots) take turns.
+
+### BUG-11 — `turnNumber` is not incremented after a human turn
+**File:** [`GameEngine.java`](src/main/java/ru/anseranser/peshki/engine/GameEngine.java) (`advancePlayer`), [`Main.java:63`](src/main/java/ru/anseranser/peshki/Main.java:63)
+**Severity:** MEDIUM (inconsistent state / latent)
+`advancePlayer(boolean)` only advanced the player index, never `turnNumber`. The bot path incremented `turnNumber` *inside* `executeBotTurn` (before calling `advancePlayer`), so bot turns counted but human turns did not. A `GameState.turnNumber()` taken after a human turn was therefore one less than after an equivalent bot turn — inconsistent and wrong for any UI that shows "turn N" or for save/restore.
+**Fix:** `advancePlayer` now increments `turnNumber` (guarded by `!isGameOver()`) before advancing the player index; the inline `turnNumber++` was removed from `executeBotTurn` so it is no longer double-counted. Single source of truth.
+
+### BUG-12 — `PawnPlaced` event reports cell index `0` instead of the corner
+**File:** [`GameEngine.java`](src/main/java/ru/anseranser/peshki/engine/GameEngine.java) (`executePlacePawn`)
+**Severity:** LOW (wrong event payload)
+`executePlacePawn` emits `new GameEvent.PawnPlaced(player, pawn, 0)` with a hardcoded `0`. The pawn is actually placed on the player's own corner cell, whose index is `cornerCell.getIndex()`. A UI that highlights the placed pawn by the event's cell index would highlight the wrong cell (cell 0, which belongs to player 1).
+**Fix:** emit `cornerCell.getIndex()` as the cell index.
+
+### BUG-13 — Dead `incrementTurn()` method
+**File:** [`GameEngine.java`](src/main/java/ru/anseranser/peshki/engine/GameEngine.java)
+**Severity:** LOW (dead code)
+`public void incrementTurn() { turnNumber++; }` was never called anywhere (turn counting was done inline in `executeBotTurn` and not at all for humans). Dead public API that also misled readers into thinking turn counting was centralized.
+**Fix:** removed. Turn counting now lives solely in `advancePlayer`.
+
+### BUG-14 — `GameSession` has no `advancePlayer`, forcing the UI to reach into the engine
+**File:** [`GameSession.java`](src/main/java/ru/anseranser/peshki/controller/GameSession.java)
+**Severity:** MEDIUM (architecture boundary leak)
+After the BUG-10 fix, `Main` called `engine.advancePlayer(extraTurn)` directly. That breaks the "UI talks only to the controller" contract established by ARCH-1/3: a future GUI would have to import `GameEngine` just to advance the turn, coupling it to engine internals.
+**Fix:** added `GameSession.advancePlayer(boolean extraTurn)` delegating to `engine.advancePlayer(...)`. `Main` now calls `session.advancePlayer(...)`.
+
+### BUG-15 — `Main` reached into `GameEngine.advancePlayer` instead of the session
+**File:** [`Main.java:63`](src/main/java/ru/anseranser/peshki/Main.java:63)
+**Severity:** LOW (consequence of BUG-14)
+Follow-up to BUG-14: `Main` must use the controller boundary, not the engine, so the orchestration logic stays portable to any UI.
+**Fix:** changed `engine.advancePlayer(extraTurn)` → `session.advancePlayer(extraTurn)`.
+
+### BUG-16 — `BoardLayout` hardcodes a 4-player square geometry
+**File:** [`BoardLayout.java`](src/main/java/ru/anseranser/peshki/engine/BoardLayout.java)
+**Severity:** LOW (latent — only triggers for non-default configs)
+The corner coordinates, direction vectors, and `int pi = (p.getNumber()-1) % 4` all assume exactly 4 players arranged on a square. For a 2- or 3-player `GameConfig` the rendered board would be wrong (phantom corners, wrong home directions). The default config is 4 players, so this is not currently triggered, but it contradicts the "configurable board" goal (ARCH-3) and would break a mobile game that lets users pick 2–3 players.
+**Status:** documented as a non-blocking follow-up. Fix: derive corner positions and home directions from `config.numberOfPlayers()` (e.g., distribute corners evenly around the ring) instead of the hardcoded 4-corner arrays.
+
+### BUG-17 — `ConsoleInput.isWinningMove` duplicates the engine's win logic
+**File:** [`ConsoleInput.java`](src/main/java/ru/anseranser/peshki/ui/console/ConsoleInput.java)
+**Severity:** LOW (duplicated logic / drift risk)
+`isWinningMove(...)` re-implements the "3 pawns HOMER + last pawn lands exactly on its own corner" rule that already lives in `GameEngine.hasWon`. If the rule changes, the two copies can drift and the console UI would give wrong "this move wins" hints.
+**Status:** documented as a non-blocking follow-up. Fix: expose a `hasWon` flag on `GameState` (computed by the engine) and have `ConsoleInput` read it instead of recomputing.
+
+### BUG-18 — `getState()` reports the current player as winner even when another player won
+**File:** [`GameEngine.java`](src/main/java/ru/anseranser/peshki/engine/GameEngine.java) (`getState`)
+**Severity:** MEDIUM (wrong winner in snapshot)
+`getState()` set `winner = currentPlayerIndex` whenever `isGameOver()`. But a player can win on a *kill made by another player's move* (e.g., player 2's pawn is killed by player 1, and that was player 2's last pawn → player 2 wins). The snapshot would then wrongly name the current player (player 1) as the winner.
+**Fix:** `getState()` now scans all players with `hasWon()` and reports the first winner found (or `-1`). `GameState.winnerPlayerNumber()` is now authoritative.
 
 ---
 
@@ -254,7 +303,7 @@ Estimated effort: Phase 0-1 ~ 1-2 days; Phase 2-3 ~ 3-5 days; Phase 4 ~ 1-2 days
 
 ## 9. Execution Status (all phases complete)
 
-All phases 0–5 have been **executed and verified**. The final `gradlew.bat build` is **BUILD SUCCESSFUL** with **66 tests passing**.
+All phases 0–5 have been **executed and verified**. The final `gradlew.bat build` is **BUILD SUCCESSFUL** with all tests passing (70 tests: the original 66 plus 4 new regression tests for BUG-11/12/18 in `GameEngineReviewTest`).
 
 ### Bugs fixed
 | ID | Title | Status |
@@ -268,6 +317,12 @@ All phases 0–5 have been **executed and verified**. The final `gradlew.bat bui
 | BUG-8 | Emit `MoveRejected` | FIXED |
 | BUG-9 | Field-ring walk bound crash | FIXED (found during rework; test: `GameSessionIntegrationTest`) |
 | BUG-10 | Human turn never advances player (bots never play) | FIXED (test: `MainGameLoopTest`) |
+| BUG-11 | `turnNumber` not incremented after human turn | FIXED (single source of truth in `advancePlayer`) |
+| BUG-12 | `PawnPlaced` reports cell index `0` | FIXED (uses `cornerCell.getIndex()`) |
+| BUG-13 | Dead `incrementTurn()` method | FIXED (removed) |
+| BUG-14 | `GameSession` lacks `advancePlayer` | FIXED (added, delegates to engine) |
+| BUG-15 | `Main` reached into `GameEngine.advancePlayer` | FIXED (uses `session.advancePlayer`) |
+| BUG-18 | `getState()` wrong winner on cross-player win | FIXED (scans `hasWon()`) |
 
 ### Architecture work delivered
 - **UI-agnostic core**: `GameState` snapshot, `BoardLayout` (coordinates from `GameConfig`), `PlayerColor` enum replacing ANSI.
@@ -281,6 +336,8 @@ All phases 0–5 have been **executed and verified**. The final `gradlew.bat bui
 - Wire `GameSession` save/load into a real UI menu / Android lifecycle (P4.3 is minimal).
 - Add a `WinChecker`/`TurnManager` split if the engine keeps growing (ARCH-11/quality note).
 - Broaden i18n coverage to all remaining console strings and add locale switching in the UI.
+- **BUG-16** — generalize `BoardLayout` to derive corner positions / home directions from `config.numberOfPlayers()` (currently hardcoded to a 4-player square; only triggers for non-default configs).
+- **BUG-17** — remove `ConsoleInput.isWinningMove` and expose a `hasWon` flag on `GameState` (computed by the engine) so the console UI stops duplicating `GameEngine.hasWon`.
 
 
 
