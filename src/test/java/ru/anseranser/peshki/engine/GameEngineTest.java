@@ -117,8 +117,7 @@ class GameEngineTest {
         Player player = engine.getBoard().getPlayers().get(0);
         // Give player a 6 to place
         List<GameEvent> events = engine.executeHumanCommand(
-                new ru.anseranser.peshki.input.MoveCommand.PlacePawn(1, 6),
-                List.of());
+                new ru.anseranser.peshki.input.MoveCommand.PlacePawn(1, 6));
         assertFalse(events.isEmpty());
         assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnPlaced));
     }

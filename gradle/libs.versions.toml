@@ -1,9 +1,11 @@
 [versions]
 lombok-version = "1.18.32"
+jackson-version = "2.17.1"
 
 
 [libraries]
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok-version" }
+jackson = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson-version" }
 
 
 

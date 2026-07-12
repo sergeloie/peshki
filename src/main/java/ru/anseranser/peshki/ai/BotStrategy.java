@@ -83,7 +83,11 @@ public class BotStrategy {
         Cell current = pawn.getCell();
         if (current == player.getCorner()) return config.fieldLength();
         int distance = 0;
-        while (current != player.getCorner() && distance < config.fieldLength()) {
+        // The shared ring is longer than fieldLength(): it also contains the
+        // other players' corners, so a pawn can be up to fieldLength() +
+        // numberOfPlayers() - 1 steps from its own corner.
+        int ringLength = config.fieldLength() + config.numberOfPlayers();
+        while (current != player.getCorner() && distance < ringLength) {
             current = current.getNextFieldCell();
             distance++;
         }

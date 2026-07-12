@@ -1,6 +1,9 @@
 package ru.anseranser.peshki;
 
-import ru.anseranser.peshki.engine.*;
+import ru.anseranser.peshki.controller.GameSession;
+import ru.anseranser.peshki.engine.GameConfig;
+import ru.anseranser.peshki.engine.GameState;
+import ru.anseranser.peshki.engine.Move;
 import ru.anseranser.peshki.engine.event.GameEvent;
 import ru.anseranser.peshki.input.InputService;
 import ru.anseranser.peshki.input.MoveCommand;
@@ -15,63 +18,59 @@ public class Main {
 
     public static void main(String[] args) {
         GameConfig config = GameConfig.DEFAULT;
-        GameEngine engine = new GameEngine(config);
+        GameSession session = new GameSession(config);
         OutputService output = new ConsoleOutput();
         InputService input = new ConsoleInput();
+        session.addListener(e -> output.onEvents(List.of(e)));
 
         int turnCount = 0;
-        while (!engine.isGameOver() && turnCount < config.maxTurns()) {
+        while (!session.isGameOver() && turnCount < config.maxTurns()) {
             turnCount++;
-            Player currentPlayer = engine.getBoard().getPlayers().get(engine.getCurrentPlayerIndex());
+            GameState state = session.getState();
+            int playerIndex = session.getCurrentPlayerIndex();
+            GameState.PlayerState current = state.players().get(playerIndex);
 
-            output.onTurnHeader(turnCount, currentPlayer.getNumber(), currentPlayer.isHuman());
+            output.onTurnHeader(turnCount, current.number(), current.human());
 
-            List<Integer> dice = engine.rollDice();
-            output.onEvents(List.of(new GameEvent.DiceRolled(currentPlayer.getNumber(), dice)));
+            session.rollDice();
 
             boolean extraTurn;
-
-            if (currentPlayer.isHuman()) {
-                extraTurn = executeHumanTurn(engine, input, output);
+            if (current.human()) {
+                extraTurn = executeHumanTurn(session, input, output);
             } else {
-                String[] beforeLines = output.snapshotBoard(engine.getBoard());
-                List<GameEvent> events = engine.executeBotTurn();
-                output.onEvents(events);
+                String[] beforeLines = output.snapshotBoard(session.getState());
+                List<GameEvent> events = session.playBotTurn();
                 extraTurn = events.stream().anyMatch(e ->
                         e instanceof GameEvent.TurnEnded te && te.extraTurn());
-                output.onBoardBeforeAfter(beforeLines, output.snapshotBoard(engine.getBoard()));
+                output.onBoardBeforeAfter(beforeLines, output.snapshotBoard(session.getState()));
             }
 
-            if (engine.isGameOver()) {
-                output.onBoard(engine.getBoard());
-                Player winner = engine.getBoard().getPlayers().get(engine.getCurrentPlayerIndex());
-                output.onGameWon(winner.getNumber());
+            if (session.isGameOver()) {
+                output.onBoard(session.getState());
+                output.onGameWon(session.getState().winnerPlayerNumber());
                 return;
             }
         }
         output.onGameEnded(config.maxTurns());
     }
 
-    private static boolean executeHumanTurn(GameEngine engine, InputService input, OutputService output) {
+    private static boolean executeHumanTurn(GameSession session, InputService input, OutputService output) {
         List<Integer> usedDice = new ArrayList<>();
-        List<Integer> remainingDice = new ArrayList<>(engine.getCurrentDice());
-        boolean extraTurn = engine.getCurrentDice().contains(6);
+        List<Integer> remainingDice = new ArrayList<>(session.getCurrentDice());
+        boolean extraTurn = session.getCurrentDice().contains(6);
 
-        engine.incrementTurn();
-        output.onBoard(engine.getBoard());
+        output.onBoard(session.getState());
 
         while (!remainingDice.isEmpty()) {
-            Player player = engine.getBoard().getPlayers().get(engine.getCurrentPlayerIndex());
-            List<Move> availableMoves = GameEngine.generateAllMoves(
-                    player, remainingDice, engine.getBoard(), engine.getConfig());
+            GameState state = session.getState();
+            List<Move> availableMoves = session.getAvailableMoves(remainingDice);
             if (availableMoves.isEmpty()) break;
 
-            MoveCommand cmd = input.getMove(player, availableMoves, engine.getBoard(),
-                    engine.getCurrentDice(), usedDice, engine.getConfig());
+            MoveCommand cmd = input.getMove(state, availableMoves, session.getCurrentDice(),
+                    usedDice, session.getState().config());
 
-            String[] beforeLines = output.snapshotBoard(engine.getBoard());
-            List<GameEvent> events = engine.executeHumanCommand(cmd, usedDice);
-            output.onEvents(events);
+            String[] beforeLines = output.snapshotBoard(session.getState());
+            List<GameEvent> events = session.submitMove(cmd);
 
             for (GameEvent e : events) {
                 if (e instanceof GameEvent.PawnKilled) extraTurn = true;
@@ -79,14 +78,11 @@ public class Main {
 
             updateRemainingDice(remainingDice, usedDice, cmd);
 
-            if (!remainingDice.isEmpty() && !engine.isGameOver()) {
-                output.onBoardBeforeAfter(beforeLines, output.snapshotBoard(engine.getBoard()));
+            if (!remainingDice.isEmpty() && !session.isGameOver()) {
+                output.onBoardBeforeAfter(beforeLines, output.snapshotBoard(session.getState()));
             }
-
-            if (engine.isGameOver()) break;
+            if (session.isGameOver()) break;
         }
-
-        engine.advancePlayer(extraTurn);
         return extraTurn;
     }
 

@@ -1,6 +1,7 @@
 package ru.anseranser.peshki.ui.console;
 
 import ru.anseranser.peshki.engine.*;
+import ru.anseranser.peshki.i18n.Messages;
 import ru.anseranser.peshki.input.InputService;
 import ru.anseranser.peshki.input.MoveCommand;
 
@@ -13,18 +14,23 @@ public class ConsoleInput implements InputService {
     private final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
     @Override
-    public MoveCommand getMove(Player player, List<Move> availableMoves, Board board,
+    public MoveCommand getMove(GameState state, List<Move> availableMoves,
                                List<Integer> allDice, List<Integer> usedDice, GameConfig config) {
         List<Integer> remaining = new ArrayList<>(allDice);
         for (int d : usedDice) remaining.remove(Integer.valueOf(d));
 
-        System.out.println("  Dice: " + allDice);
-        System.out.println("  Used: " + usedDice);
-        System.out.println("  Left:  " + remaining);
-        System.out.println("  Available moves:");
+        GameState.PlayerState current = state.players().get(state.currentPlayerIndex());
+        int playerNumber = current.number();
+        PlayerColor myColor = current.color();
+
+        System.out.println(Messages.get("prompt.dice", allDice));
+        System.out.println(Messages.get("prompt.used", usedDice));
+        System.out.println(Messages.get("prompt.left", remaining));
+        System.out.println(Messages.get("prompt.moves"));
 
         for (int i = 0; i < availableMoves.size(); i++) {
-            System.out.println("  " + (i + 1) + ". " + formatMove(player, availableMoves.get(i), board, config));
+            System.out.println("  " + (i + 1) + ". "
+                    + formatMove(state, availableMoves.get(i), playerNumber, myColor, config));
         }
 
         int choice = readNumber(1, availableMoves.size());
@@ -32,82 +38,63 @@ public class ConsoleInput implements InputService {
 
         if (selected.pawn() == null) {
             if (selected.steps() == 0) {
-                return new MoveCommand.PlacePawn(player.getNumber(), 6);
+                return new MoveCommand.PlacePawn(playerNumber, 6);
             } else {
-                return new MoveCommand.PlaceAndMove(player.getNumber(), 6, selected.steps());
+                return new MoveCommand.PlaceAndMove(playerNumber, 6, selected.steps());
             }
         } else {
-            return new MoveCommand.MovePawn(player.getNumber(), selected.pawn().getNumber(),
+            return new MoveCommand.MovePawn(playerNumber, selected.pawn().getNumber(),
                     selected.steps(), selected.consumedDice());
         }
     }
 
-    private String formatMove(Player player, Move move, Board board, GameConfig config) {
+    private String formatMove(GameState state, Move move, int playerNumber,
+                               PlayerColor myColor, GameConfig config) {
+        GameState.CellState target = state.cells().get(move.targetCellIndex());
+        boolean kill = target.occupantPlayerNumber() != null
+                && target.occupantPlayerNumber() != playerNumber;
+
         if (move.pawn() == null) {
             if (move.steps() == 0) {
-                String kill = isKillingPlace(player) ? " [KILL!]" : "";
-                return "Place new pawn on corner" + kill;
+                return kill ? Messages.get("move.placeKill") : Messages.get("move.place");
             }
-            Cell target = simulateCornerMove(player, move.steps());
-            String kill = (target != null && target.getPawn() != null) ? " [KILL!]" : "";
-            return "Place new pawn + move " + move.steps() + " steps" + kill;
+            return kill ? Messages.get("move.placeMoveKill", move.steps())
+                        : Messages.get("move.placeMove", move.steps());
         }
-        Cell target = move.pawn().findTargetCell(move.steps(), config);
+
         StringBuilder sb = new StringBuilder();
-        sb.append("Pawn ").append(move.pawn().getPlayer().getNumber());
-        sb.append(".").append(move.pawn().getNumber());
-        sb.append(" -> ").append(move.steps()).append(" steps");
-        if (target != null) {
-            if (move.pawn().getState() != Pawn.State.HOMER
-                    && target.getPawn() != null
-                    && !target.getPawn().getPlayer().equals(move.pawn().getPlayer())) {
-                sb.append(" [KILL!]");
-            }
-            if (move.pawn().getState() == Pawn.State.FIELDER
-                    && target.getCellType() == Cell.CellType.HOME) {
-                sb.append(" [HOME!]");
-            }
-            if (isWinningMove(move.pawn(), target, config)) {
-                sb.append(" [WIN!]");
-            }
-        }
+        sb.append(Messages.get("move.pawn", move.pawn().getPlayer().getNumber(),
+                move.pawn().getNumber(), move.steps()));
+        if (kill) sb.append(Messages.get("move.kill"));
+        if (target.type() == Cell.CellType.HOME) sb.append(Messages.get("move.home"));
+        if (isWinningMove(state, move, playerNumber, config)) sb.append(Messages.get("move.win"));
         return sb.toString();
     }
 
-    private boolean isKillingPlace(Player player) {
-        Cell corner = player.getCorner();
-        return corner.getPawn() != null && !corner.getPawn().getPlayer().equals(player);
-    }
-
-    private boolean isWinningMove(Pawn pawn, Cell target, GameConfig config) {
-        if (target == null || pawn.getState() == Pawn.State.HOMER) return false;
-        if (target != pawn.getPlayer().getCorner()) return false;
-        return pawn.getPlayer().getPawns().stream()
-                .filter(p -> p != pawn && p.getState() == Pawn.State.HOMER)
-                .count() == config.numberOfPawns() - 1;
-    }
-
-    private Cell simulateCornerMove(Player player, int steps) {
-        Cell current = player.getCorner();
-        for (int i = 0; i < steps; i++) {
-            Cell next = current.getNextFieldCell();
-            if (next == null) return null;
-            current = next;
-        }
-        return current;
+    private boolean isWinningMove(GameState state, Move move, int playerNumber, GameConfig config) {
+        GameState.CellState target = state.cells().get(move.targetCellIndex());
+        if (target.type() != Cell.CellType.CORNER) return false;
+        if (target.ownerPlayerNumber() == null || target.ownerPlayerNumber() != playerNumber) return false;
+        long homeCount = state.players().stream()
+                .filter(p -> p.number() == playerNumber)
+                .findFirst()
+                .map(p -> p.pawns().stream()
+                        .filter(pw -> pw.state() == Pawn.State.HOMER).count())
+                .orElse(0L);
+        return homeCount == config.numberOfPawns() - 1;
     }
 
     private int readNumber(int min, int max) {
         while (true) {
             try {
-                System.out.print("  > ");
+                System.out.print(Messages.get("prompt.choose"));
                 String line = reader.readLine();
                 if (line == null) return min;
                 int num = Integer.parseInt(line.trim());
                 if (num >= min && num <= max) return num;
-                System.out.println("  Enter a number between " + min + " and " + max);
+                System.out.println(Messages.get("prompt.range", min, max));
             } catch (NumberFormatException e) {
-                System.out.println("  Invalid input");
+                System.out.println(Messages.get("prompt.invalid"));
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

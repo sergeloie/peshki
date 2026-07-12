@@ -3,6 +3,7 @@ package ru.anseranser.peshki.engine;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -13,14 +14,22 @@ public class Board {
 
     private final List<Player> players;
     private final Map<Player, Cell> corners;
+    private final DiceRoller diceRoller;
+    private final List<Cell> allCells;
 
     public Board(GameConfig config) {
+        this(config, new RandomDiceRoller(new Random()));
+    }
+
+    public Board(GameConfig config, DiceRoller diceRoller) {
+        this.diceRoller = diceRoller;
         this.players = IntStream.rangeClosed(1, config.numberOfPlayers())
-                .mapToObj(i -> new Player(i, config))
+                .mapToObj(i -> new Player(i, config, diceRoller))
                 .toList();
         this.corners = generateCorners();
         generateHomeCells(config);
         generateFieldCells(config);
+        this.allCells = buildAllCells();
     }
 
     public List<Player> getPlayers() {
@@ -32,6 +41,41 @@ public class Board {
     }
 
     public List<Cell> getAllCells() {
+        return allCells;
+    }
+
+    /**
+     * Rebuilds the mutable board state (pawn positions, states, human flags)
+     * from a previously captured {@link GameState}. Cell indices in the state
+     * correspond 1:1 to {@link #getAllCells()} because both are produced from
+     * the same {@link GameConfig} in a deterministic order.
+     */
+    public void restore(GameState state) {
+        for (Cell c : allCells) c.setPawn(null);
+
+        Map<Integer, Player> playerByNumber = players.stream()
+                .collect(Collectors.toMap(Player::getNumber, Function.identity()));
+
+        for (GameState.PlayerState ps : state.players()) {
+            Player player = playerByNumber.get(ps.number());
+            if (player == null) continue;
+            player.setHuman(ps.human());
+
+            Map<Integer, Pawn> pawnByNumber = player.getPawns().stream()
+                    .collect(Collectors.toMap(Pawn::getNumber, Function.identity()));
+
+            for (GameState.PawnState pws : ps.pawns()) {
+                Pawn pawn = pawnByNumber.get(pws.number());
+                if (pawn == null) continue;
+                pawn.setState(pws.state());
+                Cell cell = pws.cellIndex() < 0 ? null : allCells.get(pws.cellIndex());
+                pawn.setCell(cell);
+                if (cell != null) cell.setPawn(pawn);
+            }
+        }
+    }
+
+    private List<Cell> buildAllCells() {
         var cells = new java.util.ArrayList<Cell>();
 
         // Traverse field ring once
@@ -52,6 +96,10 @@ public class Board {
                 cells.add(home);
                 home = home.getNextHomeCell();
             }
+        }
+
+        for (int i = 0; i < cells.size(); i++) {
+            cells.get(i).setIndex(i);
         }
 
         return cells;

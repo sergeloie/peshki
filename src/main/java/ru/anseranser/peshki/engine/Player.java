@@ -16,18 +16,24 @@ import static ru.anseranser.peshki.engine.Pawn.State.BENCH;
 @EqualsAndHashCode(of = "number")
 public class Player {
 
-    private static final Random RANDOM = new Random();
-
     private final int number;
     private final GameConfig config;
+    private final DiceRoller diceRoller;
     private final List<Pawn> pawns;
+    private final PlayerColor color;
     private Cell corner;
     @Setter
     private boolean human;
 
     public Player(int number, GameConfig config) {
+        this(number, config, new RandomDiceRoller(new Random()));
+    }
+
+    public Player(int number, GameConfig config, DiceRoller diceRoller) {
         this.number = number;
         this.config = config;
+        this.diceRoller = diceRoller;
+        this.color = PlayerColor.forIndex(number - 1);
         this.pawns = IntStream.rangeClosed(1, config.numberOfPawns())
                 .mapToObj(i -> new Pawn(this, i))
                 .toList();
@@ -42,7 +48,7 @@ public class Player {
     }
 
     public List<Integer> rollDice(GameConfig config) {
-        return Stream.generate(() -> RANDOM.nextInt(1, config.numberOfSidesOnDice() + 1))
+        return Stream.generate(() -> diceRoller.roll(config.numberOfSidesOnDice()))
                 .limit(config.numberOfDice())
                 .toList();
     }
@@ -84,12 +90,18 @@ public class Player {
         if (pawn.getCell() == corner) return config.fieldLength();
         Cell current = corner.getNextFieldCell();
         int pos = 0;
-        while (current != corner && pos < 100) {
+        // The field ring contains fieldLength() field cells plus one corner per
+        // player, so the full cycle back to the own corner is longer than
+        // fieldLength(). A pawn may legitimately sit on a field cell (or even
+        // another player's corner) far along the shared ring.
+        int ringLength = config.fieldLength() + config.numberOfPlayers();
+        while (pos < ringLength) {
             if (current == pawn.getCell()) return pos;
             current = current.getNextFieldCell();
             pos++;
         }
-        return -1;
+        throw new IllegalStateException(
+                "Pawn " + pawn.getNumber() + " is not on the field ring of player " + number);
     }
 
     private int getHomePosition(Pawn pawn) {

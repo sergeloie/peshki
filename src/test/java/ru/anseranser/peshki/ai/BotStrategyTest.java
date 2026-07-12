@@ -58,8 +58,8 @@ class BotStrategyTest {
         enemyCell.setPawn(enemyPawn);
 
         // Create moves: one that kills, one that doesn't
-        Move killMove = new Move(myPawn, 1, List.of(1));
-        Move normalMove = new Move(player.getPawns().get(1), 1, List.of(1));
+        Move killMove = new Move(myPawn, 1, List.of(1), -1);
+        Move normalMove = new Move(player.getPawns().get(1), 1, List.of(1), -1);
 
         // Place second pawn for normal move
         Pawn pawn2 = player.getPawns().get(1);

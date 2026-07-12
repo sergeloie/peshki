@@ -2,6 +2,7 @@ package ru.anseranser.peshki.ui.console;
 
 import ru.anseranser.peshki.engine.*;
 import ru.anseranser.peshki.engine.event.GameEvent;
+import ru.anseranser.peshki.i18n.Messages;
 import ru.anseranser.peshki.output.OutputService;
 
 import java.util.List;
@@ -13,33 +14,33 @@ public class ConsoleOutput implements OutputService {
         for (GameEvent event : events) {
             switch (event) {
                 case GameEvent.DiceRolled e ->
-                        System.out.println("  Rolled: " + e.values());
+                        System.out.println(Messages.get("event.rolled", e.values()));
                 case GameEvent.PawnPlaced e ->
-                        System.out.println("  Placed new pawn on corner");
+                        System.out.println(Messages.get("event.placed"));
                 case GameEvent.PawnMoved e ->
-                        System.out.println("  Pawn " + e.playerNumber() + "." + e.pawnNumber()
-                                + " moved " + e.steps() + " steps");
+                        System.out.println(Messages.get("event.moved",
+                                e.playerNumber(), e.pawnNumber(), e.steps()));
                 case GameEvent.PawnKilled e ->
-                        System.out.println("  Pawn " + e.killerPlayer() + "." + e.killerPawn()
-                                + " killed " + e.victimPlayer() + "." + e.victimPawn());
+                        System.out.println(Messages.get("event.killed",
+                                e.killerPlayer(), e.killerPawn(), e.victimPlayer(), e.victimPawn()));
                 case GameEvent.EnteredHome e ->
-                        System.out.println("  Pawn " + e.playerNumber() + "." + e.pawnNumber() + " entered home");
+                        System.out.println(Messages.get("event.enteredHome", e.playerNumber(), e.pawnNumber()));
                 case GameEvent.TurnEnded e -> {}
                 case GameEvent.GameWon e -> {}
                 case GameEvent.MoveRejected e ->
-                        System.out.println("  Move rejected: " + e.reason());
+                        System.out.println(Messages.get("event.rejected", e.reason()));
             }
         }
     }
 
     @Override
     public void onGameWon(int playerNumber) {
-        System.out.println("Player " + playerNumber + " wins!");
+        System.out.println(Messages.get("game.won", playerNumber));
     }
 
     @Override
-    public void onBoard(Board board) {
-        String[] lines = BoardRenderer.render(board);
+    public void onBoard(GameState state) {
+        String[] lines = BoardRenderer.render(state);
         System.out.println();
         for (String line : lines) {
             System.out.println("  " + line);
@@ -48,13 +49,13 @@ public class ConsoleOutput implements OutputService {
     }
 
     @Override
-    public String[] snapshotBoard(Board board) {
-        return BoardRenderer.render(board);
+    public String[] snapshotBoard(GameState state) {
+        return BoardRenderer.render(state);
     }
 
     @Override
     public void onBoardBeforeAfter(String[] beforeLines, String[] afterLines) {
-        System.out.println("  BEFORE" + " ".repeat(22) + "AFTER");
+        System.out.println(Messages.get("board.before") + " ".repeat(22) + Messages.get("board.after"));
         for (int i = 0; i < Math.min(beforeLines.length, afterLines.length); i++) {
             System.out.println("  " + beforeLines[i] + "    " + afterLines[i]);
         }
@@ -63,12 +64,12 @@ public class ConsoleOutput implements OutputService {
 
     @Override
     public void onTurnHeader(int turnNumber, int playerNumber, boolean isHuman) {
-        System.out.println("=== Turn " + turnNumber + " | Player " + playerNumber
-                + (isHuman ? " (YOU)" : " (BOT)") + " ===");
+        String who = isHuman ? Messages.get("turn.you") : Messages.get("turn.bot");
+        System.out.println(Messages.get("turn.header", turnNumber, playerNumber, who));
     }
 
     @Override
     public void onGameEnded(int maxTurns) {
-        System.out.println("Game ended after " + maxTurns + " turns.");
+        System.out.println(Messages.get("game.ended", maxTurns));
     }
 }

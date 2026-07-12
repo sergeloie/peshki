@@ -14,6 +14,7 @@ public class Cell {
     private Cell nextHomeCell;
     private final Player owner;
     private Pawn pawn;
+    private int index;
 
     public Cell(CellType cellType) {
         this(cellType, null);
