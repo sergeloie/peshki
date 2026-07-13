@@ -5,3 +5,6 @@ include(":core")
 
 // Console UI + game loop entry point.
 include(":console")
+
+// Desktop GUI (Swing + FlatLaf).
+include(":desktop")
