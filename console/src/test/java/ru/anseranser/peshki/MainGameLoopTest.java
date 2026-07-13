@@ -26,16 +26,12 @@ class MainGameLoopTest {
 
     @Test
     void humanTurnAdvancesSoAllPlayersIncludingBotsTakeTurns() {
-        // Deterministic dice that never roll a 6: no pawn can ever be placed and
-        // no extra turn is granted, so the turn rotates strictly 0->1->2->3->0.
         DiceRoller roller = new FixedDiceRoller(3, 2);
         GameEngine engine = new GameEngine(
                 new GameConfig(8, 4, 4, 2, 6, 50), roller);
 
         Set<Integer> playersWhoTookTurns = new HashSet<>();
         OutputService recordingOutput = new RecordingOutput(playersWhoTookTurns);
-        // The human (player 0) has no available moves with these dice, so
-        // InputService.getMove is never called; if it were, fail loudly.
         InputService input = (state, availableMoves, allDice, usedDice, config) -> {
             throw new UnsupportedOperationException("human should have no moves with dice " + allDice);
         };

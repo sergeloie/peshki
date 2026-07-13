@@ -10,8 +10,6 @@ import ru.anseranser.peshki.i18n.Messages;
 import ru.anseranser.peshki.input.InputService;
 import ru.anseranser.peshki.input.MoveCommand;
 import ru.anseranser.peshki.output.OutputService;
-import ru.anseranser.peshki.ui.console.ConsoleInput;
-import ru.anseranser.peshki.ui.console.ConsoleOutput;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,9 +22,6 @@ public class Main {
         GameConfig config = GameConfig.DEFAULT;
         GameEngine engine = new GameEngine(config);
         if (System.console() == null) {
-            // No interactive terminal (e.g. Gradle daemon, or `gradlew run`
-            // which redirects stdio). We cannot read moves from the user, so
-            // explain how to launch the game interactively and exit.
             System.out.println(Messages.get("console.noTerminal"));
             return;
         }
@@ -56,10 +51,6 @@ public class Main {
             boolean extraTurn;
             if (current.human()) {
                 extraTurn = executeHumanTurn(session, input, output);
-                // The human command handler does not advance the turn (unlike
-                // the bot path, which advances internally), so the orchestrator
-                // must do it here. Otherwise the human would keep playing every
-                // turn and the bots would never get a move.
                 session.advancePlayer(extraTurn);
             } else {
                 String[] beforeLines = output.snapshotBoard(session.getState());
@@ -111,8 +102,6 @@ public class Main {
     }
 
     private static void applyLocaleArg(String[] args) {
-        // Flatten args so both `gradlew run --args="--lang en"` (passed as a
-        // single token) and a normally split ["--lang","en"] are handled.
         List<String> tokens = new ArrayList<>();
         for (String a : args) {
             for (String t : a.split("\\s+")) {

@@ -1,11 +1,14 @@
 [versions]
 lombok-version = "1.18.32"
 jackson-version = "2.17.1"
+gdx-version = "1.12.1"
 
 
 [libraries]
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok-version" }
 jackson = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson-version" }
+gdx = { module = "com.badlogicgames.gdx:gdx", version.ref = "gdx-version" }
+gdx-lwjgl3 = { module = "com.badlogicgames.gdx:gdx-lwjgl3", version.ref = "gdx-version" }
 
 
 

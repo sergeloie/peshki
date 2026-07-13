@@ -47,6 +47,10 @@ public class GameSession {
         return engine.getState();
     }
 
+    public GameEngine getEngine() {
+        return engine;
+    }
+
     public boolean isGameOver() {
         return engine.isGameOver();
     }

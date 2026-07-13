@@ -1,11 +1,11 @@
-package ru.anseranser.peshki.ui.console;
+package ru.anseranser.peshki;
 
 import ru.anseranser.peshki.engine.GameState;
 import ru.anseranser.peshki.engine.PlayerColor;
 
 import java.util.Map;
 
-public class BoardRenderer {
+public class ConsoleBoardRenderer {
 
     private static final Map<PlayerColor, String> ANSI = Map.of(
             PlayerColor.RED, "\033[31m",
@@ -37,5 +37,4 @@ public class BoardRenderer {
         if (c.occupantPlayerNumber() == null) return "# ";
         return ANSI.get(c.occupantColor()) + c.occupantPlayerNumber() + RESET + " ";
     }
-
 }

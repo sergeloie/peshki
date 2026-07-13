@@ -1,4 +1,4 @@
-package ru.anseranser.peshki.ui.console;
+package ru.anseranser.peshki;
 
 import ru.anseranser.peshki.engine.*;
 import ru.anseranser.peshki.engine.event.GameEvent;
@@ -40,7 +40,7 @@ public class ConsoleOutput implements OutputService {
 
     @Override
     public void onBoard(GameState state) {
-        String[] lines = BoardRenderer.render(state);
+        String[] lines = ConsoleBoardRenderer.render(state);
         System.out.println();
         for (String line : lines) {
             System.out.println("  " + line);
@@ -50,7 +50,7 @@ public class ConsoleOutput implements OutputService {
 
     @Override
     public String[] snapshotBoard(GameState state) {
-        return BoardRenderer.render(state);
+        return ConsoleBoardRenderer.render(state);
     }
 
     @Override

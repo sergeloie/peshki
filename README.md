@@ -8,25 +8,47 @@ any front-end (console, Swing, Android, JavaFX, etc.) can drive.
 ## Build & run
 
 ```bash
-./gradlew build        # compile + test
-./gradlew run          # play in the terminal (console UI)
+./gradlew build        # compile + test (all modules)
+./gradlew run          # play in the terminal (legacy console UI)
 ./gradlew test         # run the test suite
 ```
 
 On Windows use `gradlew.bat` instead of `./gradlew`.
 
+### Graphical (libGDX) desktop build
+
+The project is a multi-module Gradle build. The shared game logic + libGDX view
+live in `core`; the desktop launcher is `lwjgl3-desktop`.
+
+```bash
+./gradlew :lwjgl3-desktop:run       # launch the desktop game window
+./gradlew :lwjgl3-desktop:distZip   # build a distributable
+```
+
+See [`docs/GUI_DESIGN.md`](docs/GUI_DESIGN.md) for the GUI architecture, the asset
+contract, and how the same `core` view is reused for the planned Android / Web
+targets.
+
 ## Architecture
 
+Multi-module Gradle build (see [`docs/GUI_DESIGN.md`](docs/GUI_DESIGN.md)):
+
 ```
-engine/        Pure game rules. NO I/O. (Pawn, Board, GameEngine, GameState, ...)
-ai/            Bot strategy (BotStrategy) — depends only on engine types.
-controller/    GameSession — UI-agnostic controller wrapping GameEngine,
-               emits GameEvent to listeners. This is the boundary every UI uses.
-persistence/   GameStateSerializer — JSON (de)serialization of a GameState.
-i18n/          Messages — resource-bundle based localisation helper.
-ui/console/    Console implementation of InputService / OutputService.
-ui/swing/      Minimal reference Swing UI proving the controller boundary.
+core/                 Shared module: engine + controller + persistence + i18n + libGDX view
+  engine/             Pure game rules. NO I/O. (Pawn, Board, GameEngine, GameState, ...)
+  ai/                 Bot strategy (BotStrategy) — depends only on engine types.
+  controller/         GameSession — UI-agnostic controller wrapping GameEngine,
+                       emits GameEvent to listeners. This is the boundary every UI uses.
+  persistence/        GameStateSerializer — JSON (de)serialization of a GameState.
+  i18n/               Messages — resource-bundle based localisation helper.
+  ui/console/         Console implementation of InputService / OutputService (legacy).
+  ui/swing/           Minimal reference Swing UI proving the controller boundary.
+  ui/gdx/             libGDX view (PeshkiGame, MenuScreen, GameScreen, TurnPresenter, Assets).
+lwjgl3-desktop/       Desktop launcher (LWJGL3) — depends on :core.
+android/  html/       Planned targets; reuse core's ui/gdx screens unchanged.
 ```
+
+The `core` contract (unchanged from the single-module design):
 
 ### The core contract
 

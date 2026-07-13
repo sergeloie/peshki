@@ -1,4 +1,4 @@
-package ru.anseranser.peshki.ui.console;
+package ru.anseranser.peshki;
 
 import ru.anseranser.peshki.engine.*;
 import ru.anseranser.peshki.i18n.Messages;
@@ -8,6 +8,7 @@ import ru.anseranser.peshki.input.MoveCommand;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class ConsoleInput implements InputService {
@@ -28,13 +29,18 @@ public class ConsoleInput implements InputService {
         System.out.println(Messages.get("prompt.left", remaining));
         System.out.println(Messages.get("prompt.moves"));
 
-        for (int i = 0; i < availableMoves.size(); i++) {
+        List<Move> sorted = new ArrayList<>(availableMoves);
+        sorted.sort(Comparator
+                .comparing((Move m) -> m.pawn() == null ? 0 : m.pawn().getNumber())
+                .thenComparingInt(Move::steps));
+
+        for (int i = 0; i < sorted.size(); i++) {
             System.out.println("  " + (i + 1) + ". "
-                    + formatMove(state, availableMoves.get(i), playerNumber, myColor, config));
+                    + formatMove(state, sorted.get(i), playerNumber, myColor, config));
         }
 
-        int choice = readNumber(1, availableMoves.size());
-        Move selected = availableMoves.get(choice - 1);
+        int choice = readNumber(1, sorted.size());
+        Move selected = sorted.get(choice - 1);
 
         if (selected.pawn() == null) {
             if (selected.steps() == 0) {
