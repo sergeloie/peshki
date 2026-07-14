@@ -170,6 +170,27 @@ public class Board {
         return current;
     }
 
+    public Cell findTargetCellFromCorner(int playerIndex, int steps) {
+        Cell corner = corners[playerIndex];
+        Cell current = corner;
+        boolean isLastLapPawn = countHomerPawns(playerIndex) == config.numberOfPawns() - 1;
+
+        for (int i = 0; i < steps; i++) {
+            Cell next = current.getNextFieldCell();
+            if (next == corner) {
+                if (isLastLapPawn) {
+                    return i == steps - 1 ? corner : null;
+                }
+            }
+            if (next == null) return null;
+            if (i < steps - 1 && next.isOccupied()) return null;
+            if (i == steps - 1 && next.isOccupied()
+                    && next.getOccupantPlayerIndex() == playerIndex) return null;
+            current = next;
+        }
+        return current;
+    }
+
     public void movePawn(int playerIndex, int pawnIndex, Cell target) {
         int oldCellIndex = pawnCells[playerIndex][pawnIndex];
         if (oldCellIndex != -1) {

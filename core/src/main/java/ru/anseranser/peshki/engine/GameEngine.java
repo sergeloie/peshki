@@ -313,7 +313,9 @@ public class GameEngine {
         List<Move> moves = new ArrayList<>();
         List<int[]> movablePawns = board.getMovablePawns(playerIndex);
 
+        java.util.Set<Integer> processedDice = new java.util.HashSet<>();
         for (int dieValue : dice) {
+            if (!processedDice.add(dieValue)) continue;
             for (int[] ppi : movablePawns) {
                 Cell target = board.findTargetCell(playerIndex, ppi[0], dieValue);
                 if (target != null) {
@@ -342,7 +344,7 @@ public class GameEngine {
                 List<Integer> otherDice = new ArrayList<>(dice);
                 otherDice.remove(Integer.valueOf(6));
                 for (int dieValue : otherDice) {
-                    Cell target = board.findTargetCell(playerIndex, 0, dieValue);
+                    Cell target = board.findTargetCellFromCorner(playerIndex, dieValue);
                     if (target != null) {
                         moves.add(new Move(playerIndex, -1, dieValue,
                                 List.of(6, dieValue), target.getIndex()));
