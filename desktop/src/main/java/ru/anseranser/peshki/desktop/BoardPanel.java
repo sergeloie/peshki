@@ -5,6 +5,7 @@ import ru.anseranser.peshki.engine.PlayerColor;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 
 public class BoardPanel extends JPanel {
 
@@ -12,7 +13,11 @@ public class BoardPanel extends JPanel {
     static final int BOARD_X = 20;
     static final int BOARD_Y = 20;
 
+    private static final Color LIGHT_SQUARE = new Color(238, 238, 210);
+    private static final Color DARK_SQUARE = new Color(118, 150, 86);
+
     private GameState state;
+    private BufferedImage boardTexture;
 
     public BoardPanel() {
         setPreferredSize(new Dimension(BOARD_X * 2 + 8 * CELL_SIZE, BOARD_Y * 2 + 8 * CELL_SIZE));
@@ -21,7 +26,30 @@ public class BoardPanel extends JPanel {
 
     public void updateState(GameState state) {
         this.state = state;
+        if (boardTexture == null || boardTexture.getWidth() != getWidth() || boardTexture.getHeight() != getHeight()) {
+            boardTexture = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_ARGB);
+            renderBoardTexture();
+        }
         repaint();
+    }
+
+    private void renderBoardTexture() {
+        if (boardTexture == null) return;
+        Graphics2D g2 = boardTexture.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        // Draw chess board pattern for all 8x8 cells
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                int x = BOARD_X + col * CELL_SIZE;
+                int y = BOARD_Y + row * CELL_SIZE;
+                boolean isLight = (row + col) % 2 == 0;
+                g2.setColor(isLight ? LIGHT_SQUARE : DARK_SQUARE);
+                g2.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+            }
+        }
+
+        g2.dispose();
     }
 
     @Override
@@ -31,20 +59,35 @@ public class BoardPanel extends JPanel {
         Graphics2D g2 = (Graphics2D) g;
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
+        // Draw board texture
+        if (boardTexture != null) {
+            g2.drawImage(boardTexture, 0, 0, null);
+        }
+
+        // Overlay corner and home cell highlights
         for (GameState.CellState c : state.cells()) {
             int x = BOARD_X + c.x() * CELL_SIZE;
             int y = BOARD_Y + c.y() * CELL_SIZE;
 
-            Color fill = switch (c.type()) {
-                case CORNER -> withAlpha(color(c.occupantColor() != null
-                        ? c.occupantColor() : playerColorOf(c)), 0.55f);
-                case HOME -> withAlpha(color(c.occupantColor() != null
-                        ? c.occupantColor() : playerColorOf(c)), 0.4f);
-                case FIELD -> new Color(82, 82, 97);
-            };
-            g2.setColor(fill);
-            g2.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+            switch (c.type()) {
+                case CORNER -> {
+                    Color fill = withAlpha(color(c.occupantColor() != null
+                            ? c.occupantColor() : playerColorOf(c)), 0.55f);
+                    g2.setColor(fill);
+                    g2.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+                }
+                case HOME -> {
+                    Color fill = withAlpha(color(c.occupantColor() != null
+                            ? c.occupantColor() : playerColorOf(c)), 0.4f);
+                    g2.setColor(fill);
+                    g2.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+                }
+                case FIELD -> {
+                    // Chess board pattern already drawn from texture
+                }
+            }
 
+            // Draw pawns
             if (c.occupantPawnIndex() != null) {
                 // White background circle
                 g2.setColor(Color.WHITE);
