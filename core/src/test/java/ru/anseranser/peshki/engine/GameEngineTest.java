@@ -27,12 +27,12 @@ class GameEngineTest {
 
     @Test
     void engineHas4Players() {
-        assertEquals(4, engine.getBoard().getPlayers().size());
+        assertEquals(4, engine.getBoard().getCorners().length);
     }
 
     @Test
     void firstPlayerIsHuman() {
-        assertTrue(engine.getBoard().getPlayers().get(0).isHuman());
+        assertTrue(engine.isHuman(0));
     }
 
     @Test
@@ -64,45 +64,45 @@ class GameEngineTest {
 
     @Test
     void generateAllMovesWithMovablePawns() {
-        Player player = engine.getBoard().getPlayers().get(1);
+        Board board = engine.getBoard();
+        int playerIndex = 1;
         // Place a pawn on the field
-        player.getPawns().getFirst().setCell(engine.getBoard().getCorner(player).getNextFieldCell());
-        player.getPawns().getFirst().setState(Pawn.State.FIELDER);
-        engine.getBoard().getCorner(player).getNextFieldCell().setPawn(player.getPawns().getFirst());
+        board.placePawn(playerIndex, 0, board.getCorner(playerIndex).getNextFieldCell());
 
         List<Integer> dice = List.of(3, 4);
-        List<Move> moves = GameEngine.generateAllMoves(player, dice, engine.getBoard(), config);
+        List<Move> moves = GameEngine.generateAllMoves(playerIndex, dice, board, config);
         assertFalse(moves.isEmpty());
     }
 
     @Test
     void generateAllMovesIncludesSumMoves() {
-        Player player = engine.getBoard().getPlayers().get(1);
-        player.getPawns().getFirst().setCell(engine.getBoard().getCorner(player).getNextFieldCell());
-        player.getPawns().getFirst().setState(Pawn.State.FIELDER);
-        engine.getBoard().getCorner(player).getNextFieldCell().setPawn(player.getPawns().getFirst());
+        Board board = engine.getBoard();
+        int playerIndex = 1;
+        board.placePawn(playerIndex, 0, board.getCorner(playerIndex).getNextFieldCell());
 
         List<Integer> dice = List.of(3, 4);
-        List<Move> moves = GameEngine.generateAllMoves(player, dice, engine.getBoard(), config);
+        List<Move> moves = GameEngine.generateAllMoves(playerIndex, dice, board, config);
 
         boolean hasSumMove = moves.stream()
-                .anyMatch(m -> m.pawn() != null && m.steps() == 7);
+                .anyMatch(m -> m.pawnIndex() != -1 && m.steps() == 7);
         assertTrue(hasSumMove);
     }
 
     @Test
     void generateAllMovesWithNoMovablePawnsReturnsEmpty() {
-        Player player = engine.getBoard().getPlayers().get(1);
+        int playerIndex = 1;
         // All pawns on BENCH
         List<Integer> dice = List.of(3, 4);
-        List<Move> moves = GameEngine.generateAllMoves(player, dice, engine.getBoard(), config);
+        List<Move> moves = GameEngine.generateAllMoves(playerIndex, dice, engine.getBoard(), config);
         assertTrue(moves.isEmpty());
     }
 
     @Test
     void fullBotGameCompletes() {
         GameEngine botEngine = new GameEngine(config);
-        botEngine.getBoard().getPlayers().forEach(p -> p.setHuman(false));
+        for (int pi = 0; pi < config.numberOfPlayers(); pi++) {
+            botEngine.setHuman(pi, false);
+        }
 
         int turns = 0;
         while (!botEngine.isGameOver() && turns < config.maxTurns()) {
@@ -115,8 +115,7 @@ class GameEngineTest {
 
     @Test
     void placeCommandPlacesPawnWithoutRejection() {
-        Player player = engine.getBoard().getPlayers().get(0);
-        List<GameEvent> events = engine.executeHumanCommand(new MoveCommand.PlacePawn(1, 6));
+        List<GameEvent> events = engine.executeHumanCommand(new MoveCommand.PlacePawn(0, 6));
         assertFalse(events.stream().anyMatch(e -> e instanceof GameEvent.MoveRejected),
                 "Placing a pawn must not be rejected");
         assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnPlaced));
@@ -124,8 +123,8 @@ class GameEngineTest {
 
     @Test
     void placeAndMoveCommandWorksAndMovesPawn() {
-        Player player = engine.getBoard().getPlayers().get(0);
-        List<GameEvent> events = engine.executeHumanCommand(new MoveCommand.PlaceAndMove(1, 6, 2));
+        int playerIndex = 0;
+        List<GameEvent> events = engine.executeHumanCommand(new MoveCommand.PlaceAndMove(0, 6, 2));
 
         assertFalse(events.stream().anyMatch(e -> e instanceof GameEvent.MoveRejected),
                 "PlaceAndMove must not be rejected");
@@ -133,25 +132,35 @@ class GameEngineTest {
         assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnMoved),
                 "The placed pawn must be moved after placement");
 
-        boolean hasFielder = player.getPawns().stream()
-                .anyMatch(p -> p.getState() == Pawn.State.FIELDER);
+        Board board = engine.getBoard();
+        boolean hasFielder = false;
+        for (int ppi = 0; ppi < config.numberOfPawns(); ppi++) {
+            if (board.isFielder(playerIndex, ppi)) {
+                hasFielder = true;
+                break;
+            }
+        }
         assertTrue(hasFielder, "Placed pawn should have advanced onto the field");
     }
 
     @Test
     void plainMoveWithoutKillIsNotRejected() {
-        Player player = engine.getBoard().getPlayers().get(0);
-        engine.executeHumanCommand(new MoveCommand.PlacePawn(1, 6));
+        int playerIndex = 0;
+        Board board = engine.getBoard();
+        engine.executeHumanCommand(new MoveCommand.PlacePawn(0, 6));
 
-        Pawn placed = player.getPawns().stream()
-                .filter(p -> p.getState() == Pawn.State.NEWBORN
-                        && p.getCell() == engine.getBoard().getCorner(player))
-                .findFirst()
-                .orElse(null);
-        assertNotNull(placed, "A pawn should be placed on the corner");
+        int placedPpi = -1;
+        for (int ppi = 0; ppi < config.numberOfPawns(); ppi++) {
+            if (board.isNewborn(playerIndex, ppi)
+                    && board.getPawnCell(playerIndex, ppi) == board.getCorner(playerIndex).getIndex()) {
+                placedPpi = ppi;
+                break;
+            }
+        }
+        assertTrue(placedPpi >= 0, "A pawn should be placed on the corner");
 
         List<GameEvent> move = engine.executeHumanCommand(
-                new MoveCommand.MovePawn(1, placed.getNumber(), 1, List.of()));
+                new MoveCommand.MovePawn(0, placedPpi, 1, List.of()));
         assertFalse(move.stream().anyMatch(e -> e instanceof GameEvent.MoveRejected),
                 "A non-killing move must not be rejected");
         assertTrue(move.stream().anyMatch(e -> e instanceof GameEvent.PawnMoved));

@@ -38,10 +38,10 @@ class MainGameLoopTest {
 
         Main.runGame(engine, input, recordingOutput);
 
-        assertTrue(playersWhoTookTurns.contains(1), "Human (player 1) must take a turn");
+        assertTrue(playersWhoTookTurns.contains(0), "Human (player 0) must take a turn");
+        assertTrue(playersWhoTookTurns.contains(1), "Bot (player 1) must take a turn");
         assertTrue(playersWhoTookTurns.contains(2), "Bot (player 2) must take a turn");
         assertTrue(playersWhoTookTurns.contains(3), "Bot (player 3) must take a turn");
-        assertTrue(playersWhoTookTurns.contains(4), "Bot (player 4) must take a turn");
     }
 
     private static class FixedDiceRoller implements DiceRoller {
@@ -66,12 +66,12 @@ class MainGameLoopTest {
         }
 
         @Override
-        public void onTurnHeader(int turnNumber, int playerNumber, boolean isHuman) {
-            players.add(playerNumber);
+        public void onTurnHeader(int turnNumber, int playerIndex, boolean isHuman) {
+            players.add(playerIndex);
         }
 
         @Override public void onEvents(List<GameEvent> events) {}
-        @Override public void onGameWon(int playerNumber) {}
+        @Override public void onGameWon(int playerIndex) {}
         @Override public void onBoard(GameState state) {}
         @Override public String[] snapshotBoard(GameState state) { return new String[0]; }
         @Override public void onBoardBeforeAfter(String[] beforeLines, String[] afterLines) {}

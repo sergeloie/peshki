@@ -50,7 +50,9 @@ class GameEngineReviewTest {
     void bug12_pawnPlacedReportsCorrectCornerIndex() {
         DiceRoller alwaysSix = sides -> 6;
         GameEngine engine = new GameEngine(config, alwaysSix);
-        engine.getBoard().getPlayers().forEach(p -> p.setHuman(false));
+        for (int pi = 0; pi < config.numberOfPlayers(); pi++) {
+            engine.setHuman(pi, false);
+        }
 
         int guard = 0;
         while (!engine.isGameOver() && guard < config.maxTurns()) {
@@ -67,13 +69,13 @@ class GameEngineReviewTest {
 
         assertFalse(placements.isEmpty(), "the game must contain placement events");
         for (GameEvent.PawnPlaced pp : placements) {
-            int expectedCorner = (pp.playerNumber() - 1) * spacing;
+            int expectedCorner = pp.playerIndex() * spacing;
             assertEquals(expectedCorner, pp.cellIndex(),
                     "PawnPlaced must report the placing player's own corner");
         }
     }
 
-    // BUG-18: getState().winnerPlayerNumber() must be the player who actually won,
+    // BUG-18: getState().winnerPlayerIndex() must be the player who actually won,
     // not the current player. Here player 2 has already won but it is player 1's
     // turn (currentPlayerIndex == 0). The buggy code returned currentPlayerIndex
     // (0); the fix scans hasWon() and returns 2.
@@ -81,31 +83,27 @@ class GameEngineReviewTest {
     void bug18_getStateReportsActualWinnerNotCurrentPlayer() {
         GameEngine engine = new GameEngine(config);
         Board board = engine.getBoard();
-        Player winner = board.getPlayers().get(1); // player 2
+        int winnerIndex = 1; // player 2 (0-based)
 
         // Put 3 pawns of player 2 into HOME and the last one exactly on its corner.
-        Cell corner = board.getCorner(winner);
+        Cell corner = board.getCorner(winnerIndex);
         Cell h1 = corner.getNextHomeCell();
         Cell h2 = h1.getNextHomeCell();
         Cell h3 = h2.getNextHomeCell();
-        List<Pawn> pawns = winner.getPawns();
-        placePawn(pawns.get(0), Pawn.State.HOMER, h1);
-        placePawn(pawns.get(1), Pawn.State.HOMER, h2);
-        placePawn(pawns.get(2), Pawn.State.HOMER, h3);
-        placePawn(pawns.get(3), Pawn.State.FIELDER, corner);
+        board.placePawn(winnerIndex, 0, h1);
+        board.placePawn(winnerIndex, 1, h2);
+        board.placePawn(winnerIndex, 2, h3);
+        // Place last pawn on its corner. placePawn resets stepsTraveled to 0
+        // (NEWBORN), but the win condition requires a FIELDER on the corner,
+        // so bump stepsTraveled above 0 after placement.
+        board.placePawn(winnerIndex, 3, corner);
+        board.getPawn(winnerIndex, 3).setStepsTraveled(1);
 
         GameState state = engine.getState();
         assertTrue(state.gameOver(), "player 2 has won");
-        assertEquals(2, state.winnerPlayerNumber(),
-                "winner must be the player who actually won (2), not the current player");
-        assertNotEquals(engine.getCurrentPlayerIndex(), state.winnerPlayerNumber(),
+        assertEquals(winnerIndex, state.winnerPlayerIndex(),
+                "winner must be the player who actually won (1), not the current player");
+        assertNotEquals(engine.getCurrentPlayerIndex(), state.winnerPlayerIndex(),
                 "current player (0) must not be reported as winner when player 2 won");
-    }
-
-    private static void placePawn(Pawn pawn, Pawn.State state, Cell cell) {
-        if (cell.getPawn() != null) cell.getPawn().setCell(null);
-        cell.setPawn(pawn);
-        pawn.setCell(cell);
-        pawn.setState(state);
     }
 }

@@ -23,19 +23,17 @@ class GameEngineBugTest {
     @Test
     void bug1_placeOnEnemyCornerEmitsPawnKilled() {
         Board board = engine.getBoard();
-        Player p0 = board.getPlayers().get(0);
-        Player p1 = board.getPlayers().get(1);
+        int p0 = 0;
+        int p1 = 1;
         Cell corner0 = board.getCorner(p0);
-        Pawn enemy = p1.getPawns().get(0);
-        corner0.setPawn(enemy);
-        enemy.setCell(corner0);
-        enemy.setState(Pawn.State.NEWBORN);
+        // Place an enemy pawn on corner0
+        board.placePawn(p1, 0, corner0);
 
         List<GameEvent> events = engine.executeHumanCommand(new MoveCommand.PlacePawn(0, 6));
 
         assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnKilled),
                 "Placing on an enemy corner must emit PawnKilled");
-        assertEquals(Pawn.State.BENCH, enemy.getState(), "Killed pawn returns to bench");
+        assertTrue(board.isBench(p1, 0), "Killed pawn returns to bench");
     }
 
     @Test
@@ -64,19 +62,31 @@ class GameEngineBugTest {
             }
         };
         GameEngine botEngine = new GameEngine(config, roller);
-        botEngine.getBoard().getPlayers().forEach(p -> p.setHuman(false));
+        for (int pi = 0; pi < config.numberOfPlayers(); pi++) {
+            botEngine.setHuman(pi, false);
+        }
         botEngine.rollDice();
         botEngine.executeBotTurn();
 
-        Player p0 = botEngine.getBoard().getPlayers().get(0);
-        Cell corner = botEngine.getBoard().getCorner(p0);
-        Cell twoSteps = corner.getNextFieldCell().getNextFieldCell();
-        long onField = p0.getPawns().stream()
-                .filter(p -> p.getState() == Pawn.State.FIELDER)
-                .count();
-        assertEquals(1, onField, "Exactly one pawn should be on the field");
-        assertTrue(p0.getPawns().stream()
-                        .anyMatch(p -> p.getState() == Pawn.State.FIELDER && p.getCell() == twoSteps),
+        int p0 = 0;
+        Board board = botEngine.getBoard();
+        Cell twoSteps = board.getCorner(p0).getNextFieldCell().getNextFieldCell();
+        int fielderCount = 0;
+        for (int ppi = 0; ppi < config.numberOfPawns(); ppi++) {
+            if (board.isFielder(p0, ppi)) {
+                fielderCount++;
+            }
+        }
+        assertEquals(1, fielderCount, "Exactly one pawn should be on the field");
+
+        boolean onTwoSteps = false;
+        for (int ppi = 0; ppi < config.numberOfPawns(); ppi++) {
+            if (board.isFielder(p0, ppi)
+                    && board.getPawnCell(p0, ppi) == twoSteps.getIndex()) {
+                onTwoSteps = true;
+            }
+        }
+        assertTrue(onTwoSteps,
                 "The placed pawn must have consumed both dice (moved 2 steps)");
     }
 

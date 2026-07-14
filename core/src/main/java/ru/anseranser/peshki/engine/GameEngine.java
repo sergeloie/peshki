@@ -7,6 +7,7 @@ import ru.anseranser.peshki.input.MoveCommand;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.stream.Stream;
 
 public class GameEngine {
 
@@ -14,6 +15,7 @@ public class GameEngine {
     private final Board board;
     private final DiceRoller diceRoller;
     private final BotStrategy botStrategy;
+    private final boolean[] humanFlags;
     private final List<GameEvent> eventLog = new ArrayList<>();
     private int currentPlayerIndex = 0;
     private int turnNumber = 0;
@@ -32,7 +34,8 @@ public class GameEngine {
         this.diceRoller = diceRoller;
         this.botStrategy = botStrategy;
         this.board = new Board(config, diceRoller);
-        board.getPlayers().get(0).setHuman(true);
+        this.humanFlags = new boolean[config.numberOfPlayers()];
+        humanFlags[0] = true;
     }
 
     public Board getBoard() { return board; }
@@ -41,35 +44,44 @@ public class GameEngine {
     public int getCurrentPlayerIndex() { return currentPlayerIndex; }
     public List<Integer> getCurrentDice() { return currentDice; }
     public List<GameEvent> getEventLog() { return List.copyOf(eventLog); }
+    public boolean isHuman(int playerIndex) { return humanFlags[playerIndex]; }
+    public void setHuman(int playerIndex, boolean human) { humanFlags[playerIndex] = human; }
 
     public GameState getState() {
         int[][] coords = BoardLayout.coordinates(board);
         List<GameState.CellState> cells = board.getAllCells().stream().map(c -> {
             int[] xy = coords[c.getIndex()];
-            Pawn occ = c.getPawn();
+            PlayerColor occColor = c.isOccupied()
+                    ? PlayerColor.forIndex(c.getOccupantPlayerIndex()) : null;
             return new GameState.CellState(
                     c.getIndex(), xy[0], xy[1], c.getCellType(),
-                    occ == null ? null : occ.getPlayer().getNumber(),
-                    occ == null ? null : occ.getPlayer().getColor(),
-                    occ == null ? null : occ.getNumber(),
-                    c.getOwner() == null ? null : c.getOwner().getNumber());
+                    c.isOccupied() ? c.getOccupantPlayerIndex() : null,
+                    occColor,
+                    c.isOccupied() ? c.getOccupantPawnIndex() : null,
+                    c.getOwnerPlayerIndex() >= 0 ? c.getOwnerPlayerIndex() : null);
         }).toList();
 
-        List<GameState.PlayerState> players = board.getPlayers().stream().map(p ->
-                new GameState.PlayerState(p.getNumber(), p.getColor(), p.isHuman(),
-                        p.getPawns().stream().map(pw -> new GameState.PawnState(
-                                pw.getNumber(), pw.getState(),
-                                pw.getCell() == null ? -1 : pw.getCell().getIndex())).toList())
-        ).toList();
+        List<GameState.PlayerState> players = new ArrayList<>();
+        for (int pi = 0; pi < config.numberOfPlayers(); pi++) {
+            List<GameState.PawnState> pawns = new ArrayList<>();
+            for (int ppi = 0; ppi < config.numberOfPawns(); ppi++) {
+                Pawn pawn = board.getPawn(pi, ppi);
+                pawns.add(new GameState.PawnState(
+                        ppi,
+                        board.deriveState(pi, ppi),
+                        pawn.getStepsTraveled(),
+                        board.getPawnCell(pi, ppi)));
+            }
+            players.add(new GameState.PlayerState(
+                    pi, PlayerColor.forIndex(pi), humanFlags[pi], pawns));
+        }
 
         boolean over = isGameOver();
         int winner = -1;
         if (over) {
-            winner = board.getPlayers().stream()
-                    .filter(this::hasWon)
-                    .map(Player::getNumber)
-                    .findFirst()
-                    .orElse(-1);
+            for (int pi = 0; pi < config.numberOfPlayers(); pi++) {
+                if (hasWon(pi)) { winner = pi; break; }
+            }
         }
         return new GameState(config, currentPlayerIndex, currentDice, turnNumber, over, winner, players, cells);
     }
@@ -83,6 +95,9 @@ public class GameEngine {
         this.currentDice = List.copyOf(state.currentDice());
         this.turnNumber = state.turnNumber();
         this.eventLog.clear();
+        for (GameState.PlayerState ps : state.players()) {
+            humanFlags[ps.playerIndex()] = ps.human();
+        }
         board.restore(state);
     }
 
@@ -97,54 +112,55 @@ public class GameEngine {
             turnNumber++;
         }
         if (!extraTurn && !isGameOver()) {
-            currentPlayerIndex = (currentPlayerIndex + 1) % board.getPlayers().size();
+            currentPlayerIndex = (currentPlayerIndex + 1) % config.numberOfPlayers();
         }
     }
 
     public List<Integer> rollDice() {
-        Player player = board.getPlayers().get(currentPlayerIndex);
-        currentDice = player.rollDice(config);
+        currentDice = Stream.generate(() -> diceRoller.roll(config.numberOfSidesOnDice()))
+                .limit(config.numberOfDice())
+                .toList();
         return currentDice;
     }
 
     public boolean isGameOver() {
-        return board.getPlayers().stream().anyMatch(this::hasWon);
+        for (int pi = 0; pi < config.numberOfPlayers(); pi++) {
+            if (hasWon(pi)) return true;
+        }
+        return false;
     }
 
-    private boolean hasWon(Player player) {
-        long homeCount = player.getPawns().stream()
-                .filter(p -> p.getState() == Pawn.State.HOMER)
-                .count();
-        if (homeCount != config.numberOfPawns() - 1) return false;
+    private boolean hasWon(int playerIndex) {
+        if (countHomerPawns(playerIndex) != config.numberOfPawns() - 1) return false;
 
-        Pawn lastPawn = player.getPawns().stream()
-                .filter(p -> p.getState() != Pawn.State.HOMER)
-                .findFirst()
-                .orElse(null);
-
-        if (lastPawn == null) return false;
-        if (lastPawn.getState() == Pawn.State.BENCH || lastPawn.getState() == Pawn.State.NEWBORN)
-            return false;
-
-        return lastPawn.getCell() == board.getCorner(player);
+        for (int ppi = 0; ppi < config.numberOfPawns(); ppi++) {
+            if (!board.isHome(playerIndex, ppi)) {
+                if (board.isBench(playerIndex, ppi)) return false;
+                if (board.isNewborn(playerIndex, ppi)) return false;
+                return board.getPawnCell(playerIndex, ppi) == board.getCorner(playerIndex).getIndex();
+            }
+        }
+        return false;
     }
+
+    private int countHomerPawns(int playerIndex) {
+        return board.countHomerPawns(playerIndex);
+    }
+
+    // === Bot turn ===
 
     public List<GameEvent> executeBotTurn() {
         if (turnNumber >= config.maxTurns()) return List.of();
 
         List<GameEvent> events = new ArrayList<>();
+        List<Integer> dice = new ArrayList<>(currentDice);
 
-        Player player = board.getPlayers().get(currentPlayerIndex);
-        List<Integer> dice = currentDice;
+        boolean extraTurn = executeBotMoves(currentPlayerIndex, dice, events) || dice.contains(6);
 
-        boolean extraTurn = executeBotMoves(player, dice, events) || dice.contains(6);
-
-        renumberAll();
-
-        events.add(new GameEvent.TurnEnded(player.getNumber(), extraTurn));
+        events.add(new GameEvent.TurnEnded(currentPlayerIndex, extraTurn));
 
         if (isGameOver()) {
-            events.add(new GameEvent.GameWon(player.getNumber()));
+            events.add(new GameEvent.GameWon(currentPlayerIndex));
         }
         advancePlayer(extraTurn);
 
@@ -152,134 +168,28 @@ public class GameEngine {
         return events;
     }
 
-    public List<GameEvent> executeHumanCommand(MoveCommand command) {
-        List<GameEvent> events = new ArrayList<>();
-        Player player = board.getPlayers().get(currentPlayerIndex);
-
-        switch (command) {
-            case MoveCommand.PlacePawn c -> {
-                if (!executePlacePawn(player, c.diceValue(), events).success()) {
-                    events.add(new GameEvent.MoveRejected("Cannot place pawn on corner"));
-                }
-            }
-            case MoveCommand.MovePawn c -> {
-                if (!executeMovePawn(player, c.pawnNumber(), c.steps(), events).success()) {
-                    events.add(new GameEvent.MoveRejected(
-                            "Cannot move pawn " + c.pawnNumber() + " by " + c.steps()));
-                }
-            }
-            case MoveCommand.PlaceAndMove c -> {
-                if (!executePlacePawn(player, c.placeDice(), events).success()) {
-                    events.add(new GameEvent.MoveRejected("Cannot place pawn on corner"));
-                } else if (!executeMovePawn(player, findNewbornPawnNumber(player), c.moveDice(), events).success()) {
-                    events.add(new GameEvent.MoveRejected("Cannot move placed pawn"));
-                }
-            }
-        }
-
-        renumberAll();
-        return events;
-    }
-
-    private int findNewbornPawnNumber(Player player) {
-        return player.getPawns().stream()
-                .filter(p -> p.getState() == Pawn.State.NEWBORN && p.getCell() == board.getCorner(player))
-                .findFirst()
-                .map(Pawn::getNumber)
-                .orElse(1);
-    }
-
-    private record ExecResult(boolean success, boolean killed) {}
-
-    private ExecResult executePlacePawn(Player player, int diceValue, List<GameEvent> events) {
-        Cell cornerCell = board.getCorner(player);
-        Pawn existingPawn = cornerCell.getPawn();
-
-        if (existingPawn != null && existingPawn.getPlayer().equals(player)) {
-            return new ExecResult(false, false);
-        }
-
-        List<Pawn> benchPawns = player.getPawnsByState(Pawn.State.BENCH);
-        if (benchPawns.isEmpty()) {
-            return new ExecResult(false, false);
-        }
-
-        boolean killed = false;
-        if (existingPawn != null) {
-            events.add(new GameEvent.PawnKilled(
-                    player.getNumber(), benchPawns.getFirst().getNumber(),
-                    existingPawn.getPlayer().getNumber(), existingPawn.getNumber()));
-            existingPawn.remove();
-            killed = true;
-        }
-
-        Pawn pawn = benchPawns.getFirst();
-        cornerCell.setPawn(pawn);
-        pawn.setCell(cornerCell);
-        pawn.setState(Pawn.State.NEWBORN);
-        events.add(new GameEvent.PawnPlaced(player.getNumber(), pawn.getNumber(), cornerCell.getIndex()));
-        return new ExecResult(true, killed);
-    }
-
-    private ExecResult executeMovePawn(Player player, int pawnNumber, int steps, List<GameEvent> events) {
-        Pawn pawn = player.getPawns().stream()
-                .filter(p -> p.getNumber() == pawnNumber)
-                .findFirst()
-                .orElse(null);
-        if (pawn == null || pawn.getState() == Pawn.State.BENCH) return new ExecResult(false, false);
-
-        Cell target = pawn.findTargetCell(steps, config);
-        if (target == null) return new ExecResult(false, false);
-
-        int fromIndex = cellIndex(pawn);
-        boolean killed = false;
-
-        if (pawn.getState() != Pawn.State.HOMER
-                && target.getPawn() != null
-                && !target.getPawn().getPlayer().equals(player)) {
-            Pawn victim = target.getPawn();
-            events.add(new GameEvent.PawnKilled(
-                    player.getNumber(), pawn.getNumber(),
-                    victim.getPlayer().getNumber(), victim.getNumber()));
-            victim.remove();
-            killed = true;
-        }
-
-        pawn.moveTo(target);
-
-        events.add(new GameEvent.PawnMoved(
-                player.getNumber(), pawn.getNumber(), fromIndex, cellIndex(pawn), steps));
-
-        if (pawn.getState() == Pawn.State.HOMER) {
-            events.add(new GameEvent.EnteredHome(player.getNumber(), pawn.getNumber()));
-        }
-        return new ExecResult(true, killed);
-    }
-
-    private boolean executeBotMoves(Player player, List<Integer> dice, List<GameEvent> events) {
+    private boolean executeBotMoves(int playerIndex, List<Integer> dice, List<GameEvent> events) {
         boolean kickedEnemy = false;
         List<Integer> remainingDice = new ArrayList<>(dice);
 
         while (!remainingDice.isEmpty()) {
-            List<Move> availableMoves = generateAllMoves(player, remainingDice, board, config);
+            List<Move> availableMoves = generateAllMoves(playerIndex, remainingDice, board, config);
             if (availableMoves.isEmpty()) break;
 
-            Move bestMove = botStrategy.selectBestMove(player, availableMoves, config);
+            Move bestMove = botStrategy.selectBestMove(playerIndex, availableMoves, config, board);
             if (bestMove == null) break;
 
-            if (bestMove.pawn() == null) {
-                boolean killed = executePlacePawn(player, 6, events).killed();
+            if (bestMove.pawnIndex() == -1) {
+                boolean killed = executePlacePawn(playerIndex, 6, events).killed();
                 if (bestMove.consumedDice().size() == 2) {
-                    if (executeMovePawn(player, findNewbornPawnNumber(player), bestMove.steps(), events).killed()) {
+                    int newbornPpi = findNewbornPawnIndex(playerIndex);
+                    if (newbornPpi >= 0 && executeMovePawn(playerIndex, newbornPpi, bestMove.steps(), events).killed()) {
                         killed = true;
                     }
                 }
                 if (killed) kickedEnemy = true;
             } else {
-                Cell target = bestMove.pawn().findTargetCell(bestMove.steps(), config);
-                if (target == null) break;
-
-                if (executeMovePawn(player, bestMove.pawn().getNumber(), bestMove.steps(), events).killed()) {
+                if (executeMovePawn(playerIndex, bestMove.pawnIndex(), bestMove.steps(), events).killed()) {
                     kickedEnemy = true;
                 }
             }
@@ -294,42 +204,148 @@ public class GameEngine {
         return kickedEnemy;
     }
 
-    public static List<Move> generateAllMoves(Player player, List<Integer> dice, Board board, GameConfig config) {
+    // === Human command ===
+
+    public List<GameEvent> executeHumanCommand(MoveCommand command) {
+        List<GameEvent> events = new ArrayList<>();
+
+        switch (command) {
+            case MoveCommand.PlacePawn c -> {
+                if (!executePlacePawn(c.playerIndex(), c.diceValue(), events).success()) {
+                    events.add(new GameEvent.MoveRejected("Cannot place pawn on corner"));
+                }
+            }
+            case MoveCommand.MovePawn c -> {
+                if (!executeMovePawn(c.playerIndex(), c.pawnIndex(), c.steps(), events).success()) {
+                    events.add(new GameEvent.MoveRejected(
+                            "Cannot move pawn " + c.pawnIndex() + " by " + c.steps()));
+                }
+            }
+            case MoveCommand.PlaceAndMove c -> {
+                if (!executePlacePawn(c.playerIndex(), c.placeDice(), events).success()) {
+                    events.add(new GameEvent.MoveRejected("Cannot place pawn on corner"));
+                } else {
+                    int newbornPpi = findNewbornPawnIndex(c.playerIndex());
+                    if (newbornPpi < 0 || !executeMovePawn(c.playerIndex(), newbornPpi, c.moveDice(), events).success()) {
+                        events.add(new GameEvent.MoveRejected("Cannot move placed pawn"));
+                    }
+                }
+            }
+        }
+
+        return events;
+    }
+
+    // === Core execution ===
+
+    private record ExecResult(boolean success, boolean killed) {}
+
+    private ExecResult executePlacePawn(int playerIndex, int diceValue, List<GameEvent> events) {
+        Cell cornerCell = board.getCorner(playerIndex);
+
+        if (cornerCell.isOccupied() && cornerCell.getOccupantPlayerIndex() == playerIndex) {
+            return new ExecResult(false, false);
+        }
+
+        List<int[]> benchPawns = board.getBenchPawns(playerIndex);
+        if (benchPawns.isEmpty()) {
+            return new ExecResult(false, false);
+        }
+
+        boolean killed = false;
+        if (cornerCell.isOccupied()) {
+            int victimPi = cornerCell.getOccupantPlayerIndex();
+            int victimPpi = cornerCell.getOccupantPawnIndex();
+            events.add(new GameEvent.PawnKilled(
+                    playerIndex, benchPawns.getFirst()[0],
+                    victimPi, victimPpi));
+            board.capturePawn(victimPi, victimPpi);
+            killed = true;
+        }
+
+        int ppi = benchPawns.getFirst()[0];
+        board.placePawn(playerIndex, ppi, cornerCell);
+        events.add(new GameEvent.PawnPlaced(playerIndex, ppi, cornerCell.getIndex()));
+        return new ExecResult(true, killed);
+    }
+
+    private ExecResult executeMovePawn(int playerIndex, int pawnIndex, int steps, List<GameEvent> events) {
+        if (board.isBench(playerIndex, pawnIndex)) return new ExecResult(false, false);
+
+        Cell target = board.findTargetCell(playerIndex, pawnIndex, steps);
+        if (target == null) return new ExecResult(false, false);
+
+        int fromIndex = board.getPawnCell(playerIndex, pawnIndex);
+        boolean killed = false;
+
+        if (!board.isHome(playerIndex, pawnIndex) && target.isOccupied()
+                && target.getOccupantPlayerIndex() != playerIndex) {
+            int victimPi = target.getOccupantPlayerIndex();
+            int victimPpi = target.getOccupantPawnIndex();
+            events.add(new GameEvent.PawnKilled(
+                    playerIndex, pawnIndex,
+                    victimPi, victimPpi));
+            board.capturePawn(victimPi, victimPpi);
+            killed = true;
+        }
+
+        board.movePawn(playerIndex, pawnIndex, target);
+
+        events.add(new GameEvent.PawnMoved(
+                playerIndex, pawnIndex, fromIndex, target.getIndex(), steps));
+
+        if (board.isHome(playerIndex, pawnIndex)) {
+            events.add(new GameEvent.EnteredHome(playerIndex, pawnIndex));
+        }
+        return new ExecResult(true, killed);
+    }
+
+    private int findNewbornPawnIndex(int playerIndex) {
+        for (int ppi = 0; ppi < config.numberOfPawns(); ppi++) {
+            if (board.isNewborn(playerIndex, ppi)) return ppi;
+        }
+        return -1;
+    }
+
+    // === Move generation ===
+
+    public static List<Move> generateAllMoves(int playerIndex, List<Integer> dice, Board board, GameConfig config) {
         List<Move> moves = new ArrayList<>();
-        List<Pawn> movablePawns = player.getMovablePawns();
+        List<int[]> movablePawns = board.getMovablePawns(playerIndex);
 
         for (int dieValue : dice) {
-            for (Pawn pawn : movablePawns) {
-                Cell target = pawn.findTargetCell(dieValue, config);
+            for (int[] ppi : movablePawns) {
+                Cell target = board.findTargetCell(playerIndex, ppi[0], dieValue);
                 if (target != null) {
-                    moves.add(new Move(pawn, dieValue, List.of(dieValue), target.getIndex()));
+                    moves.add(new Move(playerIndex, ppi[0], dieValue,
+                            List.of(dieValue), target.getIndex()));
                 }
             }
         }
 
         if (dice.size() == 2) {
             int sum = dice.get(0) + dice.get(1);
-            for (Pawn pawn : movablePawns) {
-                Cell target = pawn.findTargetCell(sum, config);
+            for (int[] ppi : movablePawns) {
+                Cell target = board.findTargetCell(playerIndex, ppi[0], sum);
                 if (target != null) {
-                    moves.add(new Move(pawn, sum, List.copyOf(dice), target.getIndex()));
+                    moves.add(new Move(playerIndex, ppi[0], sum,
+                            List.copyOf(dice), target.getIndex()));
                 }
             }
         }
 
-        if (dice.contains(6) && !player.getPawnsByState(Pawn.State.BENCH).isEmpty()) {
-            Cell cornerCell = board.getCorner(player);
-            Pawn existingPawn = cornerCell.getPawn();
-            if (existingPawn == null || !existingPawn.getPlayer().equals(player)) {
-                int cornerIdx = cornerCell.getIndex();
-                moves.add(new Move(null, 0, List.of(6), cornerIdx));
+        if (dice.contains(6) && !board.getBenchPawns(playerIndex).isEmpty()) {
+            Cell cornerCell = board.getCorner(playerIndex);
+            if (!cornerCell.isOccupied() || cornerCell.getOccupantPlayerIndex() != playerIndex) {
+                moves.add(new Move(playerIndex, -1, 0, List.of(6), cornerCell.getIndex()));
 
                 List<Integer> otherDice = new ArrayList<>(dice);
                 otherDice.remove(Integer.valueOf(6));
                 for (int dieValue : otherDice) {
-                    if (canPlaceAndMove(player, dieValue, board, config)) {
-                        moves.add(new Move(null, dieValue, List.of(6, dieValue),
-                                cornerTargetIndex(player, dieValue, board)));
+                    Cell target = board.findTargetCell(playerIndex, 0, dieValue);
+                    if (target != null) {
+                        moves.add(new Move(playerIndex, -1, dieValue,
+                                List.of(6, dieValue), target.getIndex()));
                     }
                 }
             }
@@ -338,42 +354,11 @@ public class GameEngine {
         return moves;
     }
 
-    private static int cornerTargetIndex(Player player, int steps, Board board) {
-        Cell current = board.getCorner(player);
-        for (int i = 0; i < steps; i++) {
-            Cell next = current.getNextFieldCell();
-            if (next == null) return -1;
-            current = next;
-        }
-        return current.getIndex();
-    }
-
     public List<Move> getAvailableMoves() {
-        return generateAllMoves(board.getPlayers().get(currentPlayerIndex), currentDice, board, config);
+        return generateAllMoves(currentPlayerIndex, currentDice, board, config);
     }
 
     public List<Move> getAvailableMoves(List<Integer> dice) {
-        return generateAllMoves(board.getPlayers().get(currentPlayerIndex), dice, board, config);
-    }
-
-    private static boolean canPlaceAndMove(Player player, int steps, Board board, GameConfig config) {
-        Cell current = board.getCorner(player);
-        for (int i = 0; i < steps; i++) {
-            Cell next = current.getNextFieldCell();
-            if (next == null) return false;
-            if (i < steps - 1 && next.getPawn() != null) return false;
-            if (i == steps - 1 && next.getPawn() != null
-                    && next.getPawn().getPlayer().equals(player)) return false;
-            current = next;
-        }
-        return true;
-    }
-
-    private void renumberAll() {
-        board.getPlayers().forEach(Player::renumber);
-    }
-
-    private int cellIndex(Pawn pawn) {
-        return pawn.getCell() == null ? -1 : pawn.getCell().getIndex();
+        return generateAllMoves(currentPlayerIndex, dice, board, config);
     }
 }

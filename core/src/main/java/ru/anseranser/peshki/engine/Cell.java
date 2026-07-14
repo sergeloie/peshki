@@ -12,16 +12,31 @@ public class Cell {
     private final CellType cellType;
     private Cell nextFieldCell;
     private Cell nextHomeCell;
-    private final Player owner;
-    private Pawn pawn;
+    private final int ownerPlayerIndex;
+    private int occupantPlayerIndex = -1;
+    private int occupantPawnIndex = -1;
     private int index;
 
     public Cell(CellType cellType) {
-        this(cellType, null);
+        this(cellType, -1);
     }
 
-    public Cell(CellType cellType, Player owner) {
+    public Cell(CellType cellType, int ownerPlayerIndex) {
         this.cellType = cellType;
-        this.owner = owner;
+        this.ownerPlayerIndex = ownerPlayerIndex;
+    }
+
+    public boolean isOccupied() {
+        return occupantPlayerIndex != -1;
+    }
+
+    public void clearOccupant() {
+        occupantPlayerIndex = -1;
+        occupantPawnIndex = -1;
+    }
+
+    public void setOccupant(int playerIndex, int pawnIndex) {
+        occupantPlayerIndex = playerIndex;
+        occupantPawnIndex = pawnIndex;
     }
 }

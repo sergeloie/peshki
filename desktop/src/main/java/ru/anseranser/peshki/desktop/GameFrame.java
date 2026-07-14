@@ -84,15 +84,15 @@ public class GameFrame extends JFrame {
     }
 
     private void onMoveClick(Move move) {
-        int playerNumber = session.getState().players().get(session.getCurrentPlayerIndex()).number();
+        int playerIndex = session.getCurrentPlayerIndex();
 
         MoveCommand cmd;
-        if (move.pawn() == null) {
+        if (move.pawnIndex() == -1) {
             cmd = move.steps() == 0
-                    ? new MoveCommand.PlacePawn(playerNumber, 6)
-                    : new MoveCommand.PlaceAndMove(playerNumber, 6, move.steps());
+                    ? new MoveCommand.PlacePawn(playerIndex, 6)
+                    : new MoveCommand.PlaceAndMove(playerIndex, 6, move.steps());
         } else {
-            cmd = new MoveCommand.MovePawn(playerNumber, move.pawn().getNumber(),
+            cmd = new MoveCommand.MovePawn(playerIndex, move.pawnIndex(),
                     move.steps(), move.consumedDice());
         }
         session.submitMove(cmd);
@@ -118,7 +118,7 @@ public class GameFrame extends JFrame {
             SwingUtilities.invokeLater(this::gameLoop);
         } else {
             JOptionPane.showMessageDialog(this,
-                    "Player " + session.getState().winnerPlayerNumber() + " wins!",
+                    "Player " + session.getState().winnerPlayerIndex() + " wins!",
                     "Game Over", JOptionPane.INFORMATION_MESSAGE);
         }
     }
@@ -127,7 +127,7 @@ public class GameFrame extends JFrame {
         if (session.isGameOver()) {
             refresh();
             JOptionPane.showMessageDialog(this,
-                    "Player " + session.getState().winnerPlayerNumber() + " wins!",
+                    "Player " + session.getState().winnerPlayerIndex() + " wins!",
                     "Game Over", JOptionPane.INFORMATION_MESSAGE);
             return;
         }

@@ -21,7 +21,7 @@ public class ConsoleInput implements InputService {
         for (int d : usedDice) remaining.remove(Integer.valueOf(d));
 
         GameState.PlayerState current = state.players().get(state.currentPlayerIndex());
-        int playerNumber = current.number();
+        int playerIndex = current.playerIndex();
         PlayerColor myColor = current.color();
 
         System.out.println(Messages.get("prompt.dice", allDice));
@@ -31,36 +31,36 @@ public class ConsoleInput implements InputService {
 
         List<Move> sorted = new ArrayList<>(availableMoves);
         sorted.sort(Comparator
-                .comparing((Move m) -> m.pawn() == null ? 0 : m.pawn().getNumber())
+                .comparingInt(Move::pawnIndex)
                 .thenComparingInt(Move::steps));
 
         for (int i = 0; i < sorted.size(); i++) {
             System.out.println("  " + (i + 1) + ". "
-                    + formatMove(state, sorted.get(i), playerNumber, myColor, config));
+                    + formatMove(state, sorted.get(i), playerIndex, myColor, config));
         }
 
         int choice = readNumber(1, sorted.size());
         Move selected = sorted.get(choice - 1);
 
-        if (selected.pawn() == null) {
+        if (selected.pawnIndex() == -1) {
             if (selected.steps() == 0) {
-                return new MoveCommand.PlacePawn(playerNumber, 6);
+                return new MoveCommand.PlacePawn(playerIndex, 6);
             } else {
-                return new MoveCommand.PlaceAndMove(playerNumber, 6, selected.steps());
+                return new MoveCommand.PlaceAndMove(playerIndex, 6, selected.steps());
             }
         } else {
-            return new MoveCommand.MovePawn(playerNumber, selected.pawn().getNumber(),
+            return new MoveCommand.MovePawn(playerIndex, selected.pawnIndex(),
                     selected.steps(), selected.consumedDice());
         }
     }
 
-    private String formatMove(GameState state, Move move, int playerNumber,
+    private String formatMove(GameState state, Move move, int playerIndex,
                                PlayerColor myColor, GameConfig config) {
         GameState.CellState target = state.cells().get(move.targetCellIndex());
-        boolean kill = target.occupantPlayerNumber() != null
-                && target.occupantPlayerNumber() != playerNumber;
+        boolean kill = target.occupantPlayerIndex() != null
+                && target.occupantPlayerIndex() != playerIndex;
 
-        if (move.pawn() == null) {
+        if (move.pawnIndex() == -1) {
             if (move.steps() == 0) {
                 return kill ? Messages.get("move.placeKill") : Messages.get("move.place");
             }
@@ -69,20 +69,20 @@ public class ConsoleInput implements InputService {
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append(Messages.get("move.pawn", move.pawn().getPlayer().getNumber(),
-                move.pawn().getNumber(), move.steps()));
+        sb.append(Messages.get("move.pawn", move.playerIndex(),
+                move.pawnIndex(), move.steps()));
         if (kill) sb.append(Messages.get("move.kill"));
         if (target.type() == Cell.CellType.HOME) sb.append(Messages.get("move.home"));
-        if (isWinningMove(state, move, playerNumber, config)) sb.append(Messages.get("move.win"));
+        if (isWinningMove(state, move, playerIndex, config)) sb.append(Messages.get("move.win"));
         return sb.toString();
     }
 
-    private boolean isWinningMove(GameState state, Move move, int playerNumber, GameConfig config) {
+    private boolean isWinningMove(GameState state, Move move, int playerIndex, GameConfig config) {
         GameState.CellState target = state.cells().get(move.targetCellIndex());
         if (target.type() != Cell.CellType.CORNER) return false;
-        if (target.ownerPlayerNumber() == null || target.ownerPlayerNumber() != playerNumber) return false;
+        if (target.ownerPlayerIndex() == null || target.ownerPlayerIndex() != playerIndex) return false;
         long homeCount = state.players().stream()
-                .filter(p -> p.number() == playerNumber)
+                .filter(p -> p.playerIndex() == playerIndex)
                 .findFirst()
                 .map(p -> p.pawns().stream()
                         .filter(pw -> pw.state() == Pawn.State.HOMER).count())

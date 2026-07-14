@@ -73,8 +73,7 @@ public class GameSession {
 
     public List<Integer> rollDice() {
         List<Integer> dice = engine.rollDice();
-        int playerNumber = engine.getBoard().getPlayers().get(engine.getCurrentPlayerIndex()).getNumber();
-        emit(List.of(new GameEvent.DiceRolled(playerNumber, dice)));
+        emit(List.of(new GameEvent.DiceRolled(engine.getCurrentPlayerIndex(), dice)));
         return dice;
     }
 

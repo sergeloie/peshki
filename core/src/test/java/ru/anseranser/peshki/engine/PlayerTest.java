@@ -3,165 +3,81 @@ package ru.anseranser.peshki.engine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class PlayerTest {
 
     private GameConfig config;
     private Board board;
-    private Player player;
 
     @BeforeEach
     void setUp() {
         config = GameConfig.DEFAULT;
         board = new Board(config);
-        player = board.getPlayers().get(0);
     }
 
     @Test
-    void renumberAllOnBenchKeepsOrder() {
-        player.renumber();
-        for (int i = 0; i < 4; i++) {
-            assertEquals(i + 1, player.getPawns().get(i).getNumber());
+    void allPawnsStartOnBench() {
+        for (int i = 0; i < config.numberOfPawns(); i++) {
+            assertTrue(board.isBench(0, i));
         }
     }
 
     @Test
-    void renumberFielderCloserToFinishGetsLowerNumber() {
-        Cell corner = board.getCorner(player);
-        Cell far = corner.getNextFieldCell();
-        Cell near = far;
-        for (int i = 0; i < 22; i++) {
-            near = near.getNextFieldCell();
-        }
-
-        Pawn pawnFar = player.getPawns().get(0);
-        pawnFar.setCell(far);
-        pawnFar.setState(Pawn.State.FIELDER);
-        far.setPawn(pawnFar);
-
-        Pawn pawnNear = player.getPawns().get(1);
-        pawnNear.setCell(near);
-        pawnNear.setState(Pawn.State.FIELDER);
-        near.setPawn(pawnNear);
-
-        player.renumber();
-
-        assertEquals(1, pawnNear.getNumber());
-        assertEquals(2, pawnFar.getNumber());
+    void pawnListHasCorrectSize() {
+        assertEquals(config.numberOfPawns(), board.getPawnList(0).size());
     }
 
     @Test
-    void renumberHomerBeatsFielder() {
-        Cell corner = board.getCorner(player);
-        Cell fieldCell = corner.getNextFieldCell();
+    void captureMovesPawnToEndOfList() {
+        Cell corner0 = board.getCorner(0);
+        Cell corner1 = board.getCorner(1);
+
+        // Place enemy pawn on player 0's corner
+        board.placePawn(1, 0, corner1);
+        Cell targetCell = corner0.getNextFieldCell();
+        board.movePawn(1, 0, targetCell);
+
+        // Place player 0's pawn on the field
+        board.placePawn(0, 0, corner0);
+        board.movePawn(0, 0, corner0.getNextFieldCell());
+
+        // Capture enemy pawn
+        board.capturePawn(1, 0);
+
+        // Enemy pawn should be back on bench
+        assertTrue(board.isBench(1, 0));
+    }
+
+    @Test
+    void countHomerPawnsWorks() {
+        Cell corner = board.getCorner(0);
         Cell homeCell = corner.getNextHomeCell();
 
-        Pawn homer = player.getPawns().get(0);
-        homer.setCell(homeCell);
-        homer.setState(Pawn.State.HOMER);
-        homeCell.setPawn(homer);
+        board.placePawn(0, 0, corner);
+        board.movePawn(0, 0, homeCell);
 
-        Pawn fielder = player.getPawns().get(1);
-        fielder.setCell(fieldCell);
-        fielder.setState(Pawn.State.FIELDER);
-        fieldCell.setPawn(fielder);
-
-        player.renumber();
-
-        assertEquals(1, homer.getNumber());
-        assertEquals(2, fielder.getNumber());
+        assertEquals(1, board.countHomerPawns(0));
     }
 
     @Test
-    void renumberHomerFurtherInHomeBeatsHomerCloser() {
-        Cell corner = board.getCorner(player);
-        Cell home1 = corner.getNextHomeCell();
-        Cell home2 = home1.getNextHomeCell();
+    void getMovablePawnsExcludesBench() {
+        Cell corner = board.getCorner(0);
+        board.placePawn(0, 0, corner);
 
-        Pawn homer1 = player.getPawns().get(0);
-        homer1.setCell(home1);
-        homer1.setState(Pawn.State.HOMER);
-        home1.setPawn(homer1);
-
-        Pawn homer2 = player.getPawns().get(1);
-        homer2.setCell(home2);
-        homer2.setState(Pawn.State.HOMER);
-        home2.setPawn(homer2);
-
-        player.renumber();
-
-        assertEquals(1, homer2.getNumber());
-        assertEquals(2, homer1.getNumber());
+        List<int[]> movable = board.getMovablePawns(0);
+        assertEquals(1, movable.size());
+        assertEquals(0, movable.get(0)[0]);
     }
 
     @Test
-    void renumberNewbornAfterFielder() {
-        Cell corner = board.getCorner(player);
-        Cell fieldCell = corner.getNextFieldCell();
+    void getBenchPawnsExcludesPlaced() {
+        Cell corner = board.getCorner(0);
+        board.placePawn(0, 0, corner);
 
-        Pawn fielder = player.getPawns().get(0);
-        fielder.setCell(fieldCell);
-        fielder.setState(Pawn.State.FIELDER);
-        fieldCell.setPawn(fielder);
-
-        Pawn newborn = player.getPawns().get(1);
-        newborn.setCell(corner);
-        newborn.setState(Pawn.State.NEWBORN);
-        corner.setPawn(newborn);
-
-        player.renumber();
-
-        assertEquals(1, fielder.getNumber());
-        assertEquals(2, newborn.getNumber());
-    }
-
-    @Test
-    void renumberFielderOnCornerGetsBestProgress() {
-        Cell corner = board.getCorner(player);
-        Pawn pawnOnCorner = player.getPawns().get(0);
-        pawnOnCorner.setCell(corner);
-        pawnOnCorner.setState(Pawn.State.FIELDER);
-        corner.setPawn(pawnOnCorner);
-
-        Pawn pawnOnField = player.getPawns().get(1);
-        Cell fieldCell = corner.getNextFieldCell();
-        pawnOnField.setCell(fieldCell);
-        pawnOnField.setState(Pawn.State.FIELDER);
-        fieldCell.setPawn(pawnOnField);
-
-        player.renumber();
-
-        assertEquals(1, pawnOnCorner.getNumber());
-        assertEquals(2, pawnOnField.getNumber());
-    }
-
-    @Test
-    void renumberAfterMoveUpdatesNumbers() {
-        Cell corner = board.getCorner(player);
-        Cell cell1 = corner.getNextFieldCell();
-        Cell cell2 = cell1.getNextFieldCell();
-
-        Pawn pawn1 = player.getPawns().get(0);
-        pawn1.setCell(cell1);
-        pawn1.setState(Pawn.State.FIELDER);
-        cell1.setPawn(pawn1);
-
-        Pawn pawn2 = player.getPawns().get(1);
-        pawn2.setCell(cell2);
-        pawn2.setState(Pawn.State.FIELDER);
-        cell2.setPawn(pawn2);
-
-        player.renumber();
-        assertEquals(2, pawn1.getNumber());
-        assertEquals(1, pawn2.getNumber());
-
-        pawn1.moveTo(cell2.getNextFieldCell());
-        cell2.getNextFieldCell().setPawn(pawn1);
-        cell2.setPawn(null);
-
-        player.renumber();
-        assertEquals(1, pawn1.getNumber());
-        assertEquals(2, pawn2.getNumber());
+        List<int[]> bench = board.getBenchPawns(0);
+        assertEquals(config.numberOfPawns() - 1, bench.size());
     }
 }

@@ -45,7 +45,7 @@ public class BoardPanel extends JPanel {
             g2.setColor(fill);
             g2.fillRect(x, y, CELL_SIZE, CELL_SIZE);
 
-            if (c.occupantPawnNumber() != null) {
+            if (c.occupantPawnIndex() != null) {
                 // White background circle
                 g2.setColor(Color.WHITE);
                 g2.fillOval(x + 4, y + 4, CELL_SIZE - 8, CELL_SIZE - 8);
@@ -60,7 +60,7 @@ public class BoardPanel extends JPanel {
                 g2.setColor(Color.WHITE);
                 g2.setFont(new Font("SansSerif", Font.BOLD, 18));
                 FontMetrics fm = g2.getFontMetrics();
-                String text = String.valueOf(c.occupantPawnNumber());
+                String text = String.valueOf(c.occupantPawnIndex());
                 int tx = x + (CELL_SIZE - fm.stringWidth(text)) / 2;
                 int ty = y + (CELL_SIZE + fm.getAscent() - fm.getDescent()) / 2;
                 g2.drawString(text, tx, ty);
@@ -69,8 +69,8 @@ public class BoardPanel extends JPanel {
     }
 
     private PlayerColor playerColorOf(GameState.CellState c) {
-        if (c.ownerPlayerNumber() != null) {
-            return PlayerColor.forIndex(c.ownerPlayerNumber() - 1);
+        if (c.ownerPlayerIndex() != null) {
+            return PlayerColor.forIndex(c.ownerPlayerIndex());
         }
         return PlayerColor.RED;
     }

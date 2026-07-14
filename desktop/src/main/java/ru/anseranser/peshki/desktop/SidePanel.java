@@ -71,26 +71,23 @@ public class SidePanel extends JPanel {
     }
 
     public void update(GameState state, List<Move> moves, int turnCount, boolean isBotTurn, Consumer<Move> onMoveClick) {
-        // Status + turn counter
         if (state.gameOver()) {
-            statusLabel.setText("Player " + state.winnerPlayerNumber() + " WINS!");
+            statusLabel.setText("Player " + state.winnerPlayerIndex() + " WINS!");
             statusLabel.setForeground(new Color(255, 215, 0));
         } else {
             GameState.PlayerState cur = state.players().get(state.currentPlayerIndex());
-            String text = "Turn " + turnCount + ": Player " + cur.number()
+            String text = "Turn " + turnCount + ": Player " + cur.playerIndex()
                     + (cur.human() ? " (you)" : " (bot)");
             statusLabel.setText(text);
             statusLabel.setForeground(cur.human() ? new Color(100, 200, 100) : Color.WHITE);
         }
 
-        // Dice — always show
         StringBuilder diceText = new StringBuilder("Dice: ");
         for (int v : state.currentDice()) {
             diceText.append("[").append(v).append("] ");
         }
         diceLabel.setText(diceText.toString());
 
-        // Move buttons — hidden during bot turns
         movesPanel.removeAll();
         if (isBotTurn) {
             JLabel botLabel = new JLabel("Bot is thinking...");
@@ -103,11 +100,11 @@ public class SidePanel extends JPanel {
         } else {
             List<Move> sorted = new ArrayList<>(moves);
             sorted.sort(Comparator
-                    .comparing((Move m) -> m.pawn() == null ? 0 : m.pawn().getNumber())
+                    .comparingInt(Move::pawnIndex)
                     .thenComparingInt(Move::steps));
             for (Move move : sorted) {
                 MoveButton btn = new MoveButton(formatMove(state, move,
-                        state.players().get(state.currentPlayerIndex()).number()));
+                        state.players().get(state.currentPlayerIndex()).playerIndex()));
                 btn.addActionListener(e -> onMoveClick.accept(move));
                 movesPanel.add(btn);
                 movesPanel.add(Box.createVerticalStrut(2));
@@ -116,21 +113,20 @@ public class SidePanel extends JPanel {
         movesPanel.revalidate();
         movesPanel.repaint();
 
-        // Bench
         benchPanel.removeAll();
         for (GameState.PlayerState ps : state.players()) {
             JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 2));
             row.setMaximumSize(new Dimension(280, 50));
             row.setAlignmentX(LEFT_ALIGNMENT);
 
-            JLabel label = new JLabel("P" + ps.number() + ":");
+            JLabel label = new JLabel("P" + ps.playerIndex() + ":");
             label.setForeground(BoardPanel.color(ps.color()));
             label.setFont(new Font("SansSerif", Font.BOLD, 12));
             row.add(label);
 
             for (GameState.PawnState pw : ps.pawns()) {
                 if (pw.state() != Pawn.State.BENCH) continue;
-                JLabel icon = createPieceIcon(ps.color(), pw.number());
+                JLabel icon = createPieceIcon(ps.color(), pw.pawnIndex());
                 row.add(icon);
             }
             benchPanel.add(row);
@@ -139,20 +135,20 @@ public class SidePanel extends JPanel {
         benchPanel.repaint();
     }
 
-    private String formatMove(GameState state, Move move, int playerNumber) {
+    private String formatMove(GameState state, Move move, int playerIndex) {
         GameState.CellState target = state.cells().get(move.targetCellIndex());
-        boolean kill = target.occupantPlayerNumber() != null
-                && target.occupantPlayerNumber() != playerNumber;
+        boolean kill = target.occupantPlayerIndex() != null
+                && target.occupantPlayerIndex() != playerIndex;
         boolean home = target.type() == ru.anseranser.peshki.engine.Cell.CellType.HOME;
 
-        if (move.pawn() == null) {
+        if (move.pawnIndex() == -1) {
             String base = move.consumedDice().size() == 2
                     ? "Place & move " + move.steps() + " steps"
                     : "Place new pawn";
             if (kill) base += " (KILL!)";
             return base;
         }
-        String base = "Pawn #" + move.pawn().getNumber() + " \u2192 " + move.steps() + " steps";
+        String base = "Pawn #" + move.pawnIndex() + " \u2192 " + move.steps() + " steps";
         if (kill) base += " (KILL!)";
         if (home) base += " \u2191 HOME";
         return base;

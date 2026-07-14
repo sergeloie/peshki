@@ -34,7 +34,7 @@ public class ConsoleBoardRenderer {
     }
 
     private static String cellToString(GameState.CellState c) {
-        if (c.occupantPlayerNumber() == null) return "# ";
-        return ANSI.get(c.occupantColor()) + c.occupantPlayerNumber() + RESET + " ";
+        if (c.occupantPlayerIndex() == null) return "# ";
+        return ANSI.get(c.occupantColor()) + c.occupantPlayerIndex() + RESET + " ";
     }
 }

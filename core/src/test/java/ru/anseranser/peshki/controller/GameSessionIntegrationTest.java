@@ -17,7 +17,9 @@ class GameSessionIntegrationTest {
     void fullBotGameReachesCompletionViaSession() {
         GameEngine engine = new GameEngine(GameConfig.DEFAULT);
         // Make every player a bot so the session can be driven headlessly.
-        engine.getBoard().getPlayers().forEach(p -> p.setHuman(false));
+        for (int pi = 0; pi < GameConfig.DEFAULT.numberOfPlayers(); pi++) {
+            engine.setHuman(pi, false);
+        }
         GameSession session = new GameSession(engine);
 
         int safety = GameConfig.DEFAULT.maxTurns() + 100;
@@ -31,13 +33,13 @@ class GameSessionIntegrationTest {
         assertTrue(session.isGameOver(), "Bot game should finish within the turn cap");
         GameState finalState = session.getState();
         assertTrue(finalState.gameOver());
-        assertTrue(finalState.winnerPlayerNumber() >= 1, "A winner must be recorded");
+        assertTrue(finalState.winnerPlayerIndex() >= 0, "A winner must be recorded");
 
         // The winning player must have all but the last pawn home, and the
         // remaining pawn must sit exactly on its own corner (the finish line),
         // per the game rules: 3 HOMER + last pawn on corner = win.
         GameState.PlayerState winner = finalState.players().stream()
-                .filter(p -> p.number() == finalState.winnerPlayerNumber())
+                .filter(p -> p.playerIndex() == finalState.winnerPlayerIndex())
                 .findFirst()
                 .orElseThrow();
         long homeCount = winner.pawns().stream()
@@ -48,8 +50,8 @@ class GameSessionIntegrationTest {
 
         int cornerIndex = finalState.cells().stream()
                 .filter(c -> c.type() == Cell.CellType.CORNER
-                        && c.ownerPlayerNumber() != null
-                        && c.ownerPlayerNumber() == finalState.winnerPlayerNumber())
+                        && c.ownerPlayerIndex() != null
+                        && c.ownerPlayerIndex() == finalState.winnerPlayerIndex())
                 .mapToInt(GameState.CellState::index)
                 .findFirst()
                 .orElse(-1);
@@ -61,7 +63,9 @@ class GameSessionIntegrationTest {
     @Test
     void listenersReceiveEventsDuringPlay() {
         GameEngine engine = new GameEngine(GameConfig.DEFAULT);
-        engine.getBoard().getPlayers().forEach(p -> p.setHuman(false));
+        for (int pi = 0; pi < GameConfig.DEFAULT.numberOfPlayers(); pi++) {
+            engine.setHuman(pi, false);
+        }
         GameSession session = new GameSession(engine);
 
         int[] eventCount = {0};

@@ -9,259 +9,190 @@ class PawnTest {
 
     private GameConfig config;
     private Board board;
-    private Player player1;
 
     @BeforeEach
     void setUp() {
         config = GameConfig.DEFAULT;
         board = new Board(config);
-        player1 = board.getPlayers().get(0);
     }
 
     @Test
     void pawnStartsOnBench() {
-        Pawn pawn = player1.getPawns().getFirst();
-        assertEquals(Pawn.State.BENCH, pawn.getState());
-        assertNull(pawn.getCell());
+        assertTrue(board.isBench(0, 0));
+        assertEquals(Pawn.State.BENCH, board.deriveState(0, 0));
     }
 
     @Test
     void pawnCanBePlacedOnCorner() {
-        Pawn pawn = player1.getPawns().getFirst();
-        Cell corner = board.getCorner(player1);
-        corner.setPawn(pawn);
-        pawn.setCell(corner);
-        pawn.setState(Pawn.State.NEWBORN);
+        Cell corner = board.getCorner(0);
+        board.placePawn(0, 0, corner);
 
-        assertEquals(Pawn.State.NEWBORN, pawn.getState());
-        assertEquals(corner, pawn.getCell());
+        assertFalse(board.isBench(0, 0));
+        assertTrue(board.isNewborn(0, 0));
+        assertEquals(Pawn.State.NEWBORN, board.deriveState(0, 0));
+        assertEquals(corner.getIndex(), board.getPawnCell(0, 0));
     }
 
     @Test
     void moveToFieldTransitionsToFielder() {
-        Pawn pawn = player1.getPawns().getFirst();
-        Cell corner = board.getCorner(player1);
+        Cell corner = board.getCorner(0);
         Cell fieldCell = corner.getNextFieldCell();
 
-        pawn.setCell(corner);
-        pawn.setState(Pawn.State.NEWBORN);
-        corner.setPawn(pawn);
+        board.placePawn(0, 0, corner);
+        board.movePawn(0, 0, fieldCell);
 
-        pawn.moveTo(fieldCell);
-
-        assertEquals(Pawn.State.FIELDER, pawn.getState());
-        assertEquals(fieldCell, pawn.getCell());
-        assertNull(corner.getPawn());
-        assertEquals(pawn, fieldCell.getPawn());
+        assertTrue(board.isFielder(0, 0));
+        assertEquals(Pawn.State.FIELDER, board.deriveState(0, 0));
+        assertEquals(fieldCell.getIndex(), board.getPawnCell(0, 0));
     }
 
     @Test
     void moveToHomeTransitionsToHomer() {
-        Pawn pawn = player1.getPawns().getFirst();
-        Cell corner = board.getCorner(player1);
+        Cell corner = board.getCorner(0);
         Cell homeCell = corner.getNextHomeCell();
 
-        pawn.setCell(corner);
-        pawn.setState(Pawn.State.FIELDER);
-        corner.setPawn(pawn);
+        board.placePawn(0, 0, corner);
+        board.movePawn(0, 0, homeCell);
 
-        pawn.moveTo(homeCell);
-
-        assertEquals(Pawn.State.HOMER, pawn.getState());
-        assertEquals(homeCell, pawn.getCell());
+        assertTrue(board.isHome(0, 0));
+        assertEquals(Pawn.State.HOMER, board.deriveState(0, 0));
     }
 
     @Test
-    void removeKicksPawnBackToBench() {
-        Pawn pawn = player1.getPawns().getFirst();
-        Cell corner = board.getCorner(player1);
-        pawn.setCell(corner);
-        pawn.setState(Pawn.State.NEWBORN);
-        corner.setPawn(pawn);
+    void captureResetsToBench() {
+        Cell corner = board.getCorner(0);
+        board.placePawn(0, 0, corner);
 
-        pawn.remove();
+        board.capturePawn(0, 0);
 
-        assertEquals(Pawn.State.BENCH, pawn.getState());
-        assertNull(pawn.getCell());
-        assertNull(corner.getPawn());
-    }
-
-    @Test
-    void removeThrowsForHomer() {
-        Pawn pawn = player1.getPawns().getFirst();
-        Cell corner = board.getCorner(player1);
-        Cell homeCell = corner.getNextHomeCell();
-        pawn.setCell(homeCell);
-        pawn.setState(Pawn.State.HOMER);
-        homeCell.setPawn(pawn);
-
-        assertThrows(IllegalStateException.class, pawn::remove);
-    }
-
-    @Test
-    void removeThrowsForBench() {
-        Pawn pawn = player1.getPawns().getFirst();
-        assertThrows(IllegalStateException.class, pawn::remove);
+        assertTrue(board.isBench(0, 0));
+        assertEquals(Pawn.State.BENCH, board.deriveState(0, 0));
+        assertEquals(-1, board.getPawnCell(0, 0));
     }
 
     @Test
     void findTargetCellFieldMove() {
-        Pawn pawn = player1.getPawns().getFirst();
-        Cell corner = board.getCorner(player1);
+        Cell corner = board.getCorner(0);
         Cell fieldCell = corner.getNextFieldCell();
-        pawn.setCell(fieldCell);
-        pawn.setState(Pawn.State.FIELDER);
-        fieldCell.setPawn(pawn);
+        board.placePawn(0, 0, corner);
+        board.movePawn(0, 0, fieldCell);
 
-        Cell target = pawn.findTargetCell(1, config);
+        Cell target = board.findTargetCell(0, 0, 1);
         assertNotNull(target);
         assertEquals(fieldCell.getNextFieldCell(), target);
     }
 
     @Test
     void findTargetCellBlockedByFriendlyPawn() {
-        Pawn pawn1 = player1.getPawns().get(0);
-        Pawn pawn2 = player1.getPawns().get(1);
-        Cell corner = board.getCorner(player1);
+        Cell corner = board.getCorner(0);
         Cell cell1 = corner.getNextFieldCell();
         Cell cell2 = cell1.getNextFieldCell();
 
-        pawn1.setCell(cell1);
-        pawn1.setState(Pawn.State.FIELDER);
-        cell1.setPawn(pawn1);
+        board.placePawn(0, 0, corner);
+        board.movePawn(0, 0, cell1);
 
-        pawn2.setCell(cell2);
-        pawn2.setState(Pawn.State.FIELDER);
-        cell2.setPawn(pawn2);
+        board.placePawn(0, 1, corner);
+        board.movePawn(0, 1, cell2);
 
-        Cell target = pawn1.findTargetCell(2, config);
+        Cell target = board.findTargetCell(0, 0, 2);
         assertNull(target);
     }
 
     @Test
     void findTargetCellCanLandOnEnemy() {
-        Player player2 = board.getPlayers().get(1);
-        Pawn myPawn = player1.getPawns().get(0);
-        Pawn enemyPawn = player2.getPawns().get(0);
+        Cell corner0 = board.getCorner(0);
+        Cell corner1 = board.getCorner(1);
+        Cell targetCell = corner0.getNextFieldCell().getNextFieldCell();
 
-        Cell corner = board.getCorner(player1);
-        Cell targetCell = corner.getNextFieldCell().getNextFieldCell();
+        board.placePawn(0, 0, corner0);
+        board.movePawn(0, 0, corner0.getNextFieldCell());
 
-        myPawn.setCell(corner.getNextFieldCell());
-        myPawn.setState(Pawn.State.FIELDER);
-        corner.getNextFieldCell().setPawn(myPawn);
+        board.placePawn(1, 0, corner1);
+        board.movePawn(1, 0, targetCell);
 
-        enemyPawn.setCell(targetCell);
-        enemyPawn.setState(Pawn.State.FIELDER);
-        targetCell.setPawn(enemyPawn);
-
-        Cell target = myPawn.findTargetCell(1, config);
+        Cell target = board.findTargetCell(0, 0, 1);
         assertNotNull(target);
         assertEquals(targetCell, target);
     }
 
     @Test
     void findTargetCellNewbornMovesOnField() {
-        Pawn pawn = player1.getPawns().getFirst();
-        Cell corner = board.getCorner(player1);
-        pawn.setCell(corner);
-        pawn.setState(Pawn.State.NEWBORN);
-        corner.setPawn(pawn);
+        Cell corner = board.getCorner(0);
+        board.placePawn(0, 0, corner);
 
-        Cell target = pawn.findTargetCell(1, config);
+        Cell target = board.findTargetCell(0, 0, 1);
         assertNotNull(target);
         assertEquals(corner.getNextFieldCell(), target);
     }
 
     @Test
     void findTargetCellNewbornDoesNotEnterHome() {
-        Pawn pawn = player1.getPawns().getFirst();
-        Cell corner = board.getCorner(player1);
-        pawn.setCell(corner);
-        pawn.setState(Pawn.State.NEWBORN);
-        corner.setPawn(pawn);
+        Cell corner = board.getCorner(0);
+        board.placePawn(0, 0, corner);
 
-        Cell target = pawn.findTargetCell(1, config);
+        Cell target = board.findTargetCell(0, 0, 1);
         assertNotNull(target);
         assertNotEquals(Cell.CellType.HOME, target.getCellType());
     }
 
     @Test
     void findTargetCellHomerMovesInHome() {
-        Pawn pawn = player1.getPawns().getFirst();
-        Cell corner = board.getCorner(player1);
+        Cell corner = board.getCorner(0);
         Cell homeCell = corner.getNextHomeCell();
-        pawn.setCell(homeCell);
-        pawn.setState(Pawn.State.HOMER);
-        homeCell.setPawn(pawn);
+        board.placePawn(0, 0, corner);
+        board.movePawn(0, 0, homeCell);
 
-        Cell target = pawn.findTargetCell(1, config);
+        Cell target = board.findTargetCell(0, 0, 1);
         assertNotNull(target);
         assertEquals(homeCell.getNextHomeCell(), target);
     }
 
     @Test
     void findTargetCellOvershootHomeReturnsNull() {
-        Pawn pawn = player1.getPawns().getFirst();
-        Cell corner = board.getCorner(player1);
+        Cell corner = board.getCorner(0);
         Cell lastHome = corner.getNextHomeCell();
         while (lastHome.getNextHomeCell() != null) {
             lastHome = lastHome.getNextHomeCell();
         }
-        pawn.setCell(lastHome);
-        pawn.setState(Pawn.State.HOMER);
-        lastHome.setPawn(pawn);
+        board.placePawn(0, 0, corner);
+        board.movePawn(0, 0, lastHome);
 
-        Cell target = pawn.findTargetCell(1, config);
+        Cell target = board.findTargetCell(0, 0, 1);
         assertNull(target);
-    }
-
-    @Test
-    void pawnNumberIsSetCorrectly() {
-        Pawn pawn = player1.getPawns().getFirst();
-        assertEquals(1, pawn.getNumber());
-        pawn.setNumber(3);
-        assertEquals(3, pawn.getNumber());
     }
 
     @Test
     void lastLapPawnWinsWithExactSteps() {
         // Place 3 pawns as HOMER
-        for (int i = 1; i < player1.getPawns().size(); i++) {
-            Pawn p = player1.getPawns().get(i);
-            Cell home = board.getCorner(player1).getNextHomeCell();
+        for (int i = 1; i < config.numberOfPawns(); i++) {
+            Cell home = board.getCorner(0).getNextHomeCell();
             for (int j = 0; j < i && home.getNextHomeCell() != null; j++) {
                 home = home.getNextHomeCell();
             }
-            p.setCell(home);
-            p.setState(Pawn.State.HOMER);
-            home.setPawn(p);
+            board.placePawn(0, i, board.getCorner(0));
+            board.movePawn(0, i, home);
         }
 
-        Pawn lastPawn = player1.getPawns().getFirst();
-        Cell ownCorner = board.getCorner(player1);
+        Cell ownCorner = board.getCorner(0);
 
         // Walk forward from corner to find cell exactly 7 steps before corner
-        // The field ring has 28 cells (4 corners + 24 field cells).
-        // Walking 21 steps from corner puts us 7 steps before returning.
         Cell pos = ownCorner;
         for (int i = 0; i < 21; i++) {
             pos = pos.getNextFieldCell();
         }
-        lastPawn.setCell(pos);
-        lastPawn.setState(Pawn.State.FIELDER);
-        pos.setPawn(lastPawn);
+        board.placePawn(0, 0, ownCorner);
+        board.movePawn(0, 0, pos);
 
         // Exactly 7 steps reaches corner
-        Cell target7 = lastPawn.findTargetCell(7, config);
+        Cell target7 = board.findTargetCell(0, 0, 7);
         assertEquals(ownCorner, target7);
 
         // 8 steps overshoots — should be null
-        Cell target8 = lastPawn.findTargetCell(8, config);
+        Cell target8 = board.findTargetCell(0, 0, 8);
         assertNull(target8);
 
         // 6 steps doesn't reach corner
-        Cell target6 = lastPawn.findTargetCell(6, config);
+        Cell target6 = board.findTargetCell(0, 0, 6);
         assertNotNull(target6);
         assertNotEquals(ownCorner, target6);
     }

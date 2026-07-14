@@ -18,27 +18,27 @@ class BoardTest {
 
     @Test
     void createsCorrectNumberOfPlayers() {
-        assertEquals(4, board.getPlayers().size());
+        assertEquals(4, board.getCorners().length);
     }
 
     @Test
     void eachPlayerHasCorner() {
-        for (Player player : board.getPlayers()) {
-            assertNotNull(board.getCorner(player));
-            assertEquals(Cell.CellType.CORNER, board.getCorner(player).getCellType());
+        for (int pi = 0; pi < config.numberOfPlayers(); pi++) {
+            assertNotNull(board.getCorner(pi));
+            assertEquals(Cell.CellType.CORNER, board.getCorner(pi).getCellType());
         }
     }
 
     @Test
     void cornersBelongToCorrectPlayers() {
-        for (Player player : board.getPlayers()) {
-            assertEquals(player, board.getCorner(player).getOwner());
+        for (int pi = 0; pi < config.numberOfPlayers(); pi++) {
+            assertEquals(pi, board.getCorner(pi).getOwnerPlayerIndex());
         }
     }
 
     @Test
     void fieldCellsFormRing() {
-        Player p1 = board.getPlayers().get(0);
+        int p1 = 0;
         Cell corner = board.getCorner(p1);
         Cell current = corner;
 
@@ -54,14 +54,14 @@ class BoardTest {
 
     @Test
     void homeCellsHaveCorrectCount() {
-        for (Player player : board.getPlayers()) {
-            Cell corner = board.getCorner(player);
+        for (int pi = 0; pi < config.numberOfPlayers(); pi++) {
+            Cell corner = board.getCorner(pi);
             int homeCount = 0;
             Cell current = corner.getNextHomeCell();
             while (current != null) {
                 homeCount++;
                 assertEquals(Cell.CellType.HOME, current.getCellType());
-                assertEquals(player, current.getOwner());
+                assertEquals(pi, current.getOwnerPlayerIndex());
                 current = current.getNextHomeCell();
             }
             assertEquals(config.homeLength(), homeCount);
@@ -70,8 +70,8 @@ class BoardTest {
 
     @Test
     void homeCellsBranchFromCorners() {
-        for (Player player : board.getPlayers()) {
-            Cell corner = board.getCorner(player);
+        for (int pi = 0; pi < config.numberOfPlayers(); pi++) {
+            Cell corner = board.getCorner(pi);
             assertNotNull(corner.getNextHomeCell());
             assertEquals(Cell.CellType.HOME, corner.getNextHomeCell().getCellType());
         }

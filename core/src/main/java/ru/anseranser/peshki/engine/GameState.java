@@ -2,32 +2,28 @@ package ru.anseranser.peshki.engine;
 
 import java.util.List;
 
-/**
- * UI-agnostic, serializable snapshot of the whole game. Any view (console,
- * mobile, desktop) renders from this; the engine never depends on a view.
- * Records are used so the structure is trivially JSON-serializable (Phase 4).
- */
 public record GameState(
         GameConfig config,
         int currentPlayerIndex,
         List<Integer> currentDice,
         int turnNumber,
         boolean gameOver,
-        int winnerPlayerNumber,
+        int winnerPlayerIndex,
         List<PlayerState> players,
         List<CellState> cells
 ) {
 
     public record PlayerState(
-            int number,
+            int playerIndex,
             PlayerColor color,
             boolean human,
             List<PawnState> pawns
     ) {}
 
     public record PawnState(
-            int number,
+            int pawnIndex,
             Pawn.State state,
+            int stepsTraveled,
             int cellIndex
     ) {}
 
@@ -36,9 +32,9 @@ public record GameState(
             int x,
             int y,
             Cell.CellType type,
-            Integer occupantPlayerNumber,
+            Integer occupantPlayerIndex,
             PlayerColor occupantColor,
-            Integer occupantPawnNumber,
-            Integer ownerPlayerNumber
+            Integer occupantPawnIndex,
+            Integer ownerPlayerIndex
     ) {}
 }

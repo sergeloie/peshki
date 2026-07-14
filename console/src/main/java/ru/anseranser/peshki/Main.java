@@ -28,10 +28,6 @@ public class Main {
         runGame(engine, new ConsoleInput(), new ConsoleOutput());
     }
 
-    /**
-     * Drives a full game to completion. Extracted from {@link #main} so it can be
-     * exercised by tests with injected input/output and a deterministic engine.
-     */
     static void runGame(GameEngine engine, InputService input, OutputService output) {
         GameConfig config = engine.getConfig();
         GameSession session = new GameSession(engine);
@@ -44,7 +40,7 @@ public class Main {
             int playerIndex = session.getCurrentPlayerIndex();
             GameState.PlayerState current = state.players().get(playerIndex);
 
-            output.onTurnHeader(turnCount, current.number(), current.human());
+            output.onTurnHeader(turnCount, current.playerIndex(), current.human());
 
             session.rollDice();
 
@@ -62,7 +58,7 @@ public class Main {
 
             if (session.isGameOver()) {
                 output.onBoard(session.getState());
-                output.onGameWon(session.getState().winnerPlayerNumber());
+                output.onGameWon(session.getState().winnerPlayerIndex());
                 return;
             }
         }

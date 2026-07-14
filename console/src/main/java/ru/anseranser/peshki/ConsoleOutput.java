@@ -19,12 +19,12 @@ public class ConsoleOutput implements OutputService {
                         System.out.println(Messages.get("event.placed"));
                 case GameEvent.PawnMoved e ->
                         System.out.println(Messages.get("event.moved",
-                                e.playerNumber(), e.pawnNumber(), e.steps()));
+                                e.playerIndex(), e.pawnIndex(), e.steps()));
                 case GameEvent.PawnKilled e ->
                         System.out.println(Messages.get("event.killed",
-                                e.killerPlayer(), e.killerPawn(), e.victimPlayer(), e.victimPawn()));
+                                e.killerPlayerIndex(), e.killerPawnIndex(), e.victimPlayerIndex(), e.victimPawnIndex()));
                 case GameEvent.EnteredHome e ->
-                        System.out.println(Messages.get("event.enteredHome", e.playerNumber(), e.pawnNumber()));
+                        System.out.println(Messages.get("event.enteredHome", e.playerIndex(), e.pawnIndex()));
                 case GameEvent.TurnEnded e -> {}
                 case GameEvent.GameWon e -> {}
                 case GameEvent.MoveRejected e ->

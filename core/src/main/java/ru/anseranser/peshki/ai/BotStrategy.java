@@ -5,89 +5,86 @@ import ru.anseranser.peshki.engine.*;
 import java.util.Comparator;
 import java.util.List;
 
-import static ru.anseranser.peshki.engine.Pawn.State.BENCH;
-import static ru.anseranser.peshki.engine.Pawn.State.HOMER;
-
 public class BotStrategy {
 
-    public Move selectBestMove(Player player, List<Move> availableMoves, GameConfig config) {
+    public Move selectBestMove(int playerIndex, List<Move> availableMoves,
+                               GameConfig config, Board board) {
         return availableMoves.stream()
-                .max(Comparator.comparingInt(m -> scoreMove(player, m, config)))
+                .max(Comparator.comparingInt(m -> scoreMove(playerIndex, m, config, board)))
                 .orElse(null);
     }
 
-    private int scoreMove(Player player, Move move, GameConfig config) {
-        if (move.pawn() == null) {
-            Cell cornerCell = player.getCorner();
-            Pawn existingPawn = cornerCell.getPawn();
-            if (existingPawn != null && !existingPawn.getPlayer().equals(player)) {
+    private int scoreMove(int playerIndex, Move move, GameConfig config, Board board) {
+        if (move.pawnIndex() == -1) {
+            Cell cornerCell = board.getCorner(playerIndex);
+            if (cornerCell.isOccupied() && cornerCell.getOccupantPlayerIndex() != playerIndex) {
                 return 800_000;
             }
             return 100_000;
         }
 
-        Pawn pawn = move.pawn();
-        int steps = move.steps();
-        Cell target = pawn.findTargetCell(steps, config);
+        int ppi = move.pawnIndex();
+        Cell target = board.findTargetCell(playerIndex, ppi, move.steps());
         if (target == null) return -1;
 
-        boolean killsEnemy = pawn.getState() != Pawn.State.HOMER
-                && target.getPawn() != null
-                && !target.getPawn().getPlayer().equals(player);
+        boolean killsEnemy = !board.isHome(playerIndex, ppi)
+                && target.isOccupied()
+                && target.getOccupantPlayerIndex() != playerIndex;
 
-        Player enemy = killsEnemy ? target.getPawn().getPlayer() : null;
+        int enemyIndex = killsEnemy ? target.getOccupantPlayerIndex() : -1;
 
-        boolean entersHome = pawn.getState() == Pawn.State.FIELDER
+        boolean entersHome = board.isFielder(playerIndex, ppi)
                 && target.getCellType() == Cell.CellType.HOME;
 
-        Cell source = pawn.getCell();
-        boolean onEnemyCorner = source.getCellType() == Cell.CellType.CORNER
-                && !source.getOwner().equals(player);
-        boolean onOwnCorner = source.getCellType() == Cell.CellType.CORNER
-                && source.getOwner().equals(player);
+        Cell source = board.getPawnCell(playerIndex, ppi) >= 0
+                ? board.getAllCells().get(board.getPawnCell(playerIndex, ppi)) : null;
+        boolean onEnemyCorner = source != null
+                && source.getCellType() == Cell.CellType.CORNER
+                && source.getOwnerPlayerIndex() != playerIndex;
+        boolean onOwnCorner = source != null
+                && source.getCellType() == Cell.CellType.CORNER
+                && source.getOwnerPlayerIndex() == playerIndex;
 
-        if (isWinningMove(player, pawn, steps, config)) return 1_000_000;
-        if (killsEnemy && isEnemyLastFieldPawn(enemy, config)) return 900_000;
+        if (isWinningMove(playerIndex, ppi, move.steps(), config, board)) return 1_000_000;
+        if (killsEnemy && isEnemyLastFieldPawn(enemyIndex, config, board)) return 900_000;
         if (killsEnemy) return 800_000;
         if (entersHome) return 700_000;
         if (onEnemyCorner) return 600_000;
         if (onOwnCorner) return 500_000;
 
         int maxDistance = config.fieldLength();
-        int distance = calculateDistanceToHome(player, pawn, config);
+        int distance = calculateDistanceToHome(playerIndex, ppi, config, board);
         return 400_000 + (maxDistance - distance);
     }
 
-    private boolean isWinningMove(Player player, Pawn pawn, int steps, GameConfig config) {
-        if (pawn.getState() == Pawn.State.HOMER) return false;
-        Cell target = pawn.findTargetCell(steps, config);
-        if (target == null || target != player.getCorner()) return false;
-        return player.getPawns().stream()
-                .filter(p -> p != pawn && p.getState() == HOMER)
-                .count() == config.numberOfPawns() - 1;
+    private boolean isWinningMove(int playerIndex, int ppi, int steps,
+                                  GameConfig config, Board board) {
+        if (board.isHome(playerIndex, ppi)) return false;
+        Cell target = board.findTargetCell(playerIndex, ppi, steps);
+        if (target == null || target != board.getCorner(playerIndex)) return false;
+        return board.countHomerPawns(playerIndex) == config.numberOfPawns() - 1;
     }
 
-    private boolean isEnemyLastFieldPawn(Player enemy, GameConfig config) {
-        if (enemy == null) return false;
-        long homeCount = enemy.getPawns().stream()
-                .filter(p -> p.getState() == HOMER)
-                .count();
-        long fieldCount = enemy.getPawns().stream()
-                .filter(p -> p.getState() != HOMER && p.getState() != BENCH)
-                .count();
+    private boolean isEnemyLastFieldPawn(int enemyIndex, GameConfig config, Board board) {
+        if (enemyIndex < 0) return false;
+        long homeCount = board.countHomerPawns(enemyIndex);
+        long fieldCount = 0;
+        for (int i = 0; i < config.numberOfPawns(); i++) {
+            if (board.isFielder(enemyIndex, i)) fieldCount++;
+        }
         return homeCount == config.numberOfPawns() - 1 && fieldCount == 1;
     }
 
-    private int calculateDistanceToHome(Player player, Pawn pawn, GameConfig config) {
-        if (pawn.getState() == Pawn.State.HOMER) return 0;
-        Cell current = pawn.getCell();
-        if (current == player.getCorner()) return config.fieldLength();
+    private int calculateDistanceToHome(int playerIndex, int ppi, GameConfig config, Board board) {
+        if (board.isHome(playerIndex, ppi)) return 0;
+        int cellIndex = board.getPawnCell(playerIndex, ppi);
+        if (cellIndex < 0) return config.fieldLength();
+        Cell current = board.getAllCells().get(cellIndex);
+        Cell corner = board.getCorner(playerIndex);
+        if (current == corner) return config.fieldLength();
         int distance = 0;
-        // The shared ring is longer than fieldLength(): it also contains the
-        // other players' corners, so a pawn can be up to fieldLength() +
-        // numberOfPlayers() - 1 steps from its own corner.
         int ringLength = config.fieldLength() + config.numberOfPlayers();
-        while (current != player.getCorner() && distance < ringLength) {
+        while (current != corner && distance < ringLength) {
             current = current.getNextFieldCell();
             distance++;
         }
