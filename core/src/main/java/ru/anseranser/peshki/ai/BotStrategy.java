@@ -5,89 +5,98 @@ import ru.anseranser.peshki.engine.*;
 import java.util.Comparator;
 import java.util.List;
 
-public class BotStrategy {
+/**
+ * Heuristic bot: one {@link MoveSelector} among others (ticket 08).
+ * Reads only the immutable {@link PositionView} — the same input
+ * a future neural network will consume.
+ */
+public class BotStrategy implements MoveSelector {
 
-    public Move selectBestMove(int playerIndex, List<Move> availableMoves,
-                               GameConfig config, Board board) {
-        return availableMoves.stream()
-                .max(Comparator.comparingInt(m -> scoreMove(playerIndex, m, config, board)))
+    @Override
+    public Move select(MoveContext context, List<Move> legalMoves) {
+        if (legalMoves.isEmpty()) {
+            return null;
+        }
+        PositionView view = context.board();
+        int playerIndex = legalMoves.getFirst().playerIndex();
+        return legalMoves.stream()
+                .max(Comparator.comparingInt(m -> scoreMove(view, playerIndex, m)))
                 .orElse(null);
     }
 
-    private int scoreMove(int playerIndex, Move move, GameConfig config, Board board) {
-        if (move.pawnIndex() == -1) {
-            Cell cornerCell = board.getCorner(playerIndex);
-            if (cornerCell.isOccupied() && cornerCell.getOccupantPlayerIndex() != playerIndex) {
-                return 800_000;
-            }
-            return 100_000;
+    private int scoreMove(PositionView view, int playerIndex, Move move) {
+        return switch (move) {
+            case Move.Place p -> scorePlace(view, playerIndex);
+            case Move.Step s -> scoreStep(view, playerIndex, s);
+        };
+    }
+
+    private int scorePlace(PositionView view, int playerIndex) {
+        int[] occ = view.occupantAt(view.ownCorner(playerIndex));
+        if (occ != null && occ[0] != playerIndex) {
+            return 800_000;
+        }
+        return 100_000;
+    }
+
+    private int scoreStep(PositionView view, int playerIndex, Move.Step step) {
+        int ppi = step.pawnIndex();
+        Integer target = view.findTarget(playerIndex, ppi, step.steps());
+        if (target == null) {
+            return -1;
         }
 
-        int ppi = move.pawnIndex();
-        Cell target = board.findTargetCell(playerIndex, ppi, move.steps());
-        if (target == null) return -1;
+        int[] occ = view.occupantAt(target);
+        boolean killsEnemy = !view.isHome(playerIndex, ppi)
+                && occ != null
+                && occ[0] != playerIndex;
 
-        boolean killsEnemy = !board.isHome(playerIndex, ppi)
-                && target.isOccupied()
-                && target.getOccupantPlayerIndex() != playerIndex;
+        int enemyIndex = killsEnemy ? occ[0] : -1;
 
-        int enemyIndex = killsEnemy ? target.getOccupantPlayerIndex() : -1;
+        boolean entersHome = view.isFielder(playerIndex, ppi)
+                && view.isHomeCell(target);
 
-        boolean entersHome = board.isFielder(playerIndex, ppi)
-                && target.getCellType() == Cell.CellType.HOME;
+        int source = view.cellOf(playerIndex, ppi);
+        boolean onEnemyCorner = view.isCornerCell(source)
+                && view.cornerOwner(source) != playerIndex;
+        boolean onOwnCorner = view.isOwnCornerCell(source, playerIndex);
 
-        Cell source = board.getPawnCell(playerIndex, ppi) >= 0
-                ? board.getAllCells().get(board.getPawnCell(playerIndex, ppi)) : null;
-        boolean onEnemyCorner = source != null
-                && source.getCellType() == Cell.CellType.CORNER
-                && source.getOwnerPlayerIndex() != playerIndex;
-        boolean onOwnCorner = source != null
-                && source.getCellType() == Cell.CellType.CORNER
-                && source.getOwnerPlayerIndex() == playerIndex;
+        if (WinChecker.isWinningMove(view, playerIndex, ppi, step.steps())) {
+            return 1_000_000;
+        }
+        if (killsEnemy && isEnemyLastFieldPawn(view, enemyIndex)) {
+            return 900_000;
+        }
+        if (killsEnemy) {
+            return 800_000;
+        }
+        if (entersHome) {
+            return 700_000;
+        }
+        if (onEnemyCorner) {
+            return 600_000;
+        }
+        if (onOwnCorner) {
+            return 500_000;
+        }
 
-        if (isWinningMove(playerIndex, ppi, move.steps(), config, board)) return 1_000_000;
-        if (killsEnemy && isEnemyLastFieldPawn(enemyIndex, config, board)) return 900_000;
-        if (killsEnemy) return 800_000;
-        if (entersHome) return 700_000;
-        if (onEnemyCorner) return 600_000;
-        if (onOwnCorner) return 500_000;
-
-        int maxDistance = config.fieldLength();
-        int distance = calculateDistanceToHome(playerIndex, ppi, config, board);
+        int maxDistance = view.config().fieldLength();
+        int distance = view.ringDistanceToOwnCorner(playerIndex, ppi);
         return 400_000 + (maxDistance - distance);
     }
 
-    private boolean isWinningMove(int playerIndex, int ppi, int steps,
-                                  GameConfig config, Board board) {
-        if (board.isHome(playerIndex, ppi)) return false;
-        Cell target = board.findTargetCell(playerIndex, ppi, steps);
-        if (target == null || target != board.getCorner(playerIndex)) return false;
-        return board.countHomerPawns(playerIndex) == config.numberOfPawns() - 1;
-    }
-
-    private boolean isEnemyLastFieldPawn(int enemyIndex, GameConfig config, Board board) {
-        if (enemyIndex < 0) return false;
-        long homeCount = board.countHomerPawns(enemyIndex);
+    private boolean isEnemyLastFieldPawn(PositionView view, int enemyIndex) {
+        if (enemyIndex < 0) {
+            return false;
+        }
+        GameConfig config = view.config();
+        long homeCount = view.countHome(enemyIndex);
         long fieldCount = 0;
         for (int i = 0; i < config.numberOfPawns(); i++) {
-            if (board.isFielder(enemyIndex, i)) fieldCount++;
+            if (view.isFielder(enemyIndex, i)) {
+                fieldCount++;
+            }
         }
         return homeCount == config.numberOfPawns() - 1 && fieldCount == 1;
-    }
-
-    private int calculateDistanceToHome(int playerIndex, int ppi, GameConfig config, Board board) {
-        if (board.isHome(playerIndex, ppi)) return 0;
-        int cellIndex = board.getPawnCell(playerIndex, ppi);
-        if (cellIndex < 0) return config.fieldLength();
-        Cell current = board.getAllCells().get(cellIndex);
-        Cell corner = board.getCorner(playerIndex);
-        if (current == corner) return config.fieldLength();
-        int distance = 0;
-        int ringLength = config.fieldLength() + config.numberOfPlayers();
-        while (current != corner && distance < ringLength) {
-            current = current.getNextFieldCell();
-            distance++;
-        }
-        return distance;
     }
 }

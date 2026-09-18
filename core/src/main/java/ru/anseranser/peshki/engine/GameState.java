@@ -24,7 +24,8 @@ public record GameState(
             int pawnIndex,
             Pawn.State state,
             int stepsTraveled,
-            int cellIndex
+            int cellIndex,
+            int progress
     ) {}
 
     public record CellState(

@@ -93,11 +93,12 @@ class GameEngineReviewTest {
         board.placePawn(winnerIndex, 0, h1);
         board.placePawn(winnerIndex, 1, h2);
         board.placePawn(winnerIndex, 2, h3);
-        // Place last pawn on its corner. placePawn resets stepsTraveled to 0
-        // (NEWBORN), but the win condition requires a FIELDER on the corner,
-        // so bump stepsTraveled above 0 after placement.
-        board.placePawn(winnerIndex, 3, corner);
-        board.getPawn(winnerIndex, 3).setStepsTraveled(1);
+        // Place last pawn on its corner as a FIELDER: put it on the adjacent
+        // field cell first, then move it onto the corner. A pawn that has
+        // travelled is a fielder, not a newborn (ticket 04: state derives
+        // from Position, not from a mutable counter).
+        board.placePawn(winnerIndex, 3, corner.getNextFieldCell());
+        board.movePawn(winnerIndex, 3, corner);
 
         GameState state = engine.getState();
         assertTrue(state.gameOver(), "player 2 has won");

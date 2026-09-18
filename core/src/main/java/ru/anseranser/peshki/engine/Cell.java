@@ -13,8 +13,6 @@ public class Cell {
     private Cell nextFieldCell;
     private Cell nextHomeCell;
     private final int ownerPlayerIndex;
-    private int occupantPlayerIndex = -1;
-    private int occupantPawnIndex = -1;
     private int index;
 
     public Cell(CellType cellType) {
@@ -24,19 +22,5 @@ public class Cell {
     public Cell(CellType cellType, int ownerPlayerIndex) {
         this.cellType = cellType;
         this.ownerPlayerIndex = ownerPlayerIndex;
-    }
-
-    public boolean isOccupied() {
-        return occupantPlayerIndex != -1;
-    }
-
-    public void clearOccupant() {
-        occupantPlayerIndex = -1;
-        occupantPawnIndex = -1;
-    }
-
-    public void setOccupant(int playerIndex, int pawnIndex) {
-        occupantPlayerIndex = playerIndex;
-        occupantPawnIndex = pawnIndex;
     }
 }

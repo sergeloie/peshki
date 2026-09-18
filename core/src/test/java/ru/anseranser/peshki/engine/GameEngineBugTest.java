@@ -2,9 +2,10 @@ package ru.anseranser.peshki.engine;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import ru.anseranser.peshki.controller.GameSession;
 import ru.anseranser.peshki.engine.event.GameEvent;
-import ru.anseranser.peshki.input.MoveCommand;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -29,7 +30,13 @@ class GameEngineBugTest {
         // Place an enemy pawn on corner0
         board.placePawn(p1, 0, corner0);
 
-        List<GameEvent> events = engine.executeHumanCommand(new MoveCommand.PlacePawn(0, 6));
+        List<Move> moves = MoveGenerator.generate(board, 0, List.of(6));
+        Move place = moves.stream()
+                .filter(m -> m instanceof Move.Place p && p.steps() == 0)
+                .findFirst()
+                .orElseThrow();
+        List<GameEvent> events = new ArrayList<>();
+        engine.applyMove(place, events);
 
         assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnKilled),
                 "Placing on an enemy corner must emit PawnKilled");
@@ -92,8 +99,12 @@ class GameEngineBugTest {
 
     @Test
     void bug8_invalidMoveEmitsMoveRejected() {
-        List<GameEvent> events = engine.executeHumanCommand(
-                new MoveCommand.MovePawn(0, 1, 3, List.of(3)));
+        GameSession session = new GameSession(engine);
+        session.rollDice();
+        Move illegal = new Move.Step(0, 1, 3, List.of(3), -1);
+
+        List<GameEvent> events = session.submitMove(illegal);
+
         assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.MoveRejected),
                 "An impossible move must be rejected with feedback");
     }

@@ -21,6 +21,11 @@ class BotStrategyTest {
         strategy = new BotStrategy();
     }
 
+    private MoveContext context(Board b, List<Integer> dice) {
+        return new MoveContext(null, PositionView.snapshot(b),
+                new DiceSet(dice), List.copyOf(dice));
+    }
+
     @Test
     void selectBestMoveReturnsNonNull() {
         int playerIndex = 1;
@@ -29,7 +34,7 @@ class BotStrategyTest {
 
         List<Move> moves = GameEngine.generateAllMoves(playerIndex, List.of(3, 4), board, config);
         if (!moves.isEmpty()) {
-            Move best = strategy.selectBestMove(playerIndex, moves, config, board);
+            Move best = strategy.select(context(board, List.of(3, 4)), moves);
             assertNotNull(best);
         }
     }
@@ -48,23 +53,23 @@ class BotStrategyTest {
         board.placePawn(enemyIndex, 0, enemyCell);
 
         // Create moves: one that kills, one that doesn't
-        Move killMove = new Move(playerIndex, 0, 1, List.of(1), enemyCell.getIndex());
+        Move killMove = new Move.Step(playerIndex, 0, 1, List.of(1), enemyCell.getIndex());
 
         // Place second pawn for normal move
         Cell cell2 = board.getCorner(playerIndex).getNextFieldCell().getNextFieldCell().getNextFieldCell();
         board.placePawn(playerIndex, 1, cell2);
-        Move normalMove = new Move(playerIndex, 1, 1, List.of(1),
+        Move normalMove = new Move.Step(playerIndex, 1, 1, List.of(1),
                 board.findTargetCell(playerIndex, 1, 1).getIndex());
 
-        Move best = strategy.selectBestMove(playerIndex, List.of(killMove, normalMove), config, board);
+        Move best = strategy.select(context(board, List.of(1)),
+                List.of(killMove, normalMove));
         assertNotNull(best);
         assertEquals(killMove, best);
     }
 
     @Test
     void botDoesNotCrashWithEmptyMoves() {
-        int playerIndex = 1;
-        Move best = strategy.selectBestMove(playerIndex, List.of(), config, board);
+        Move best = strategy.select(context(board, List.of(1)), List.of());
         assertNull(best);
     }
 }

@@ -4,11 +4,8 @@ import ru.anseranser.peshki.controller.GameSession;
 import ru.anseranser.peshki.engine.GameConfig;
 import ru.anseranser.peshki.engine.GameEngine;
 import ru.anseranser.peshki.engine.GameState;
-import ru.anseranser.peshki.engine.Move;
-import ru.anseranser.peshki.engine.event.GameEvent;
 import ru.anseranser.peshki.i18n.Messages;
 import ru.anseranser.peshki.input.InputService;
-import ru.anseranser.peshki.input.MoveCommand;
 import ru.anseranser.peshki.output.OutputService;
 
 import java.util.ArrayList;
@@ -31,6 +28,9 @@ public class Main {
     static void runGame(GameEngine engine, InputService input, OutputService output) {
         GameConfig config = engine.getConfig();
         GameSession session = new GameSession(engine);
+        // Player 0 is human (blocking prompts); the rest are bots.
+        // Any seat can be swapped mid-game via setController — same interface.
+        session.setController(0, new HumanSelector(input), true);
         session.addListener(e -> output.onEvents(List.of(e)));
 
         int turnCount = 0;
@@ -42,19 +42,10 @@ public class Main {
 
             output.onTurnHeader(turnCount, current.playerIndex(), current.human());
 
+            String[] beforeLines = output.snapshotBoard(session.getState());
             session.rollDice();
-
-            boolean extraTurn;
-            if (current.human()) {
-                extraTurn = executeHumanTurn(session, input, output);
-                session.advancePlayer(extraTurn);
-            } else {
-                String[] beforeLines = output.snapshotBoard(session.getState());
-                List<GameEvent> events = session.playBotTurn();
-                extraTurn = events.stream().anyMatch(e ->
-                        e instanceof GameEvent.TurnEnded te && te.extraTurn());
-                output.onBoardBeforeAfter(beforeLines, output.snapshotBoard(session.getState()));
-            }
+            session.playCurrentTurn();
+            output.onBoardBeforeAfter(beforeLines, output.snapshotBoard(session.getState()));
 
             if (session.isGameOver()) {
                 output.onBoard(session.getState());
@@ -63,38 +54,6 @@ public class Main {
             }
         }
         output.onGameEnded(config.maxTurns());
-    }
-
-    private static boolean executeHumanTurn(GameSession session, InputService input, OutputService output) {
-        List<Integer> usedDice = new ArrayList<>();
-        List<Integer> remainingDice = new ArrayList<>(session.getCurrentDice());
-        boolean extraTurn = session.getCurrentDice().contains(6);
-
-        output.onBoard(session.getState());
-
-        while (!remainingDice.isEmpty()) {
-            GameState state = session.getState();
-            List<Move> availableMoves = session.getAvailableMoves(remainingDice);
-            if (availableMoves.isEmpty()) break;
-
-            MoveCommand cmd = input.getMove(state, availableMoves, session.getCurrentDice(),
-                    usedDice, session.getState().config());
-
-            String[] beforeLines = output.snapshotBoard(session.getState());
-            List<GameEvent> events = session.submitMove(cmd);
-
-            for (GameEvent e : events) {
-                if (e instanceof GameEvent.PawnKilled) extraTurn = true;
-            }
-
-            updateRemainingDice(remainingDice, usedDice, cmd);
-
-            if (!remainingDice.isEmpty() && !session.isGameOver()) {
-                output.onBoardBeforeAfter(beforeLines, output.snapshotBoard(session.getState()));
-            }
-            if (session.isGameOver()) break;
-        }
-        return extraTurn;
     }
 
     private static void applyLocaleArg(String[] args) {
@@ -113,27 +72,6 @@ public class Main {
             if (t.startsWith("--lang=")) {
                 Messages.setLocale(new Locale.Builder().setLanguage(t.substring("--lang=".length())).build());
                 return;
-            }
-        }
-    }
-
-    private static void updateRemainingDice(List<Integer> remainingDice, List<Integer> usedDice, MoveCommand command) {
-        switch (command) {
-            case MoveCommand.PlacePawn c -> {
-                remainingDice.remove(Integer.valueOf(c.diceValue()));
-                usedDice.add(c.diceValue());
-            }
-            case MoveCommand.MovePawn c -> {
-                for (int d : c.consumedDice()) {
-                    remainingDice.remove(Integer.valueOf(d));
-                    usedDice.add(d);
-                }
-            }
-            case MoveCommand.PlaceAndMove c -> {
-                remainingDice.remove(Integer.valueOf(c.placeDice()));
-                remainingDice.remove(Integer.valueOf(c.moveDice()));
-                usedDice.add(c.placeDice());
-                usedDice.add(c.moveDice());
             }
         }
     }

@@ -1,11 +1,14 @@
 package ru.anseranser.peshki.desktop;
 
+import ru.anseranser.peshki.engine.DisplayNumbers;
 import ru.anseranser.peshki.engine.GameState;
 import ru.anseranser.peshki.engine.PlayerColor;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.HashMap;
+import java.util.Map;
 
 public class BoardPanel extends JPanel {
 
@@ -65,6 +68,10 @@ public class BoardPanel extends JPanel {
         }
 
         // Overlay corner and home cell highlights
+        Map<Integer, Map<Integer, Integer>> numbers = new HashMap<>();
+        for (GameState.PlayerState ps : state.players()) {
+            numbers.put(ps.playerIndex(), DisplayNumbers.assign(ps.pawns()));
+        }
         for (GameState.CellState c : state.cells()) {
             int x = BOARD_X + c.x() * CELL_SIZE;
             int y = BOARD_Y + c.y() * CELL_SIZE;
@@ -99,11 +106,12 @@ public class BoardPanel extends JPanel {
                 g2.setColor(Color.BLACK);
                 g2.setStroke(new BasicStroke(2f));
                 g2.drawOval(x + 8, y + 8, CELL_SIZE - 16, CELL_SIZE - 16);
-                // Pawn number
+                // Pawn number (#1 = closest to home)
                 g2.setColor(Color.WHITE);
                 g2.setFont(new Font("SansSerif", Font.BOLD, 18));
                 FontMetrics fm = g2.getFontMetrics();
-                String text = String.valueOf(c.occupantPawnIndex());
+                String text = String.valueOf(
+                        numbers.get(c.occupantPlayerIndex()).get(c.occupantPawnIndex()));
                 int tx = x + (CELL_SIZE - fm.stringWidth(text)) / 2;
                 int ty = y + (CELL_SIZE + fm.getAscent() - fm.getDescent()) / 2;
                 g2.drawString(text, tx, ty);

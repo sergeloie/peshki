@@ -3,8 +3,8 @@ package ru.anseranser.peshki.engine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import ru.anseranser.peshki.engine.event.GameEvent;
-import ru.anseranser.peshki.input.MoveCommand;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -84,7 +84,7 @@ class GameEngineTest {
         List<Move> moves = GameEngine.generateAllMoves(playerIndex, dice, board, config);
 
         boolean hasSumMove = moves.stream()
-                .anyMatch(m -> m.pawnIndex() != -1 && m.steps() == 7);
+                .anyMatch(m -> m instanceof Move.Step s && s.steps() == 7);
         assertTrue(hasSumMove);
     }
 
@@ -114,20 +114,31 @@ class GameEngineTest {
     }
 
     @Test
-    void placeCommandPlacesPawnWithoutRejection() {
-        List<GameEvent> events = engine.executeHumanCommand(new MoveCommand.PlacePawn(0, 6));
-        assertFalse(events.stream().anyMatch(e -> e instanceof GameEvent.MoveRejected),
-                "Placing a pawn must not be rejected");
+    void placeMoveAppliesPawnPlaced() {
+        List<Move> moves = MoveGenerator.generate(engine.getBoard(), 0, List.of(6));
+        Move place = moves.stream()
+                .filter(m -> m instanceof Move.Place p && p.steps() == 0)
+                .findFirst()
+                .orElseThrow();
+
+        List<GameEvent> events = new ArrayList<>();
+        engine.applyMove(place, events);
+
         assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnPlaced));
     }
 
     @Test
-    void placeAndMoveCommandWorksAndMovesPawn() {
+    void placeAndMoveAppliesPlacedAndMoved() {
         int playerIndex = 0;
-        List<GameEvent> events = engine.executeHumanCommand(new MoveCommand.PlaceAndMove(0, 6, 2));
+        List<Move> moves = MoveGenerator.generate(engine.getBoard(), playerIndex, List.of(6, 2));
+        Move placeAndMove = moves.stream()
+                .filter(m -> m instanceof Move.Place p && p.steps() == 2)
+                .findFirst()
+                .orElseThrow();
 
-        assertFalse(events.stream().anyMatch(e -> e instanceof GameEvent.MoveRejected),
-                "PlaceAndMove must not be rejected");
+        List<GameEvent> events = new ArrayList<>();
+        engine.applyMove(placeAndMove, events);
+
         assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnPlaced));
         assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnMoved),
                 "The placed pawn must be moved after placement");
@@ -144,10 +155,15 @@ class GameEngineTest {
     }
 
     @Test
-    void plainMoveWithoutKillIsNotRejected() {
+    void plainMoveWithoutKillEmitsPawnMoved() {
         int playerIndex = 0;
         Board board = engine.getBoard();
-        engine.executeHumanCommand(new MoveCommand.PlacePawn(0, 6));
+        List<Move> placements = MoveGenerator.generate(board, playerIndex, List.of(6));
+        Move place = placements.stream()
+                .filter(m -> m instanceof Move.Place p && p.steps() == 0)
+                .findFirst()
+                .orElseThrow();
+        engine.applyMove(place, new ArrayList<>());
 
         int placedPpi = -1;
         for (int ppi = 0; ppi < config.numberOfPawns(); ppi++) {
@@ -159,10 +175,18 @@ class GameEngineTest {
         }
         assertTrue(placedPpi >= 0, "A pawn should be placed on the corner");
 
-        List<GameEvent> move = engine.executeHumanCommand(
-                new MoveCommand.MovePawn(0, placedPpi, 1, List.of()));
-        assertFalse(move.stream().anyMatch(e -> e instanceof GameEvent.MoveRejected),
-                "A non-killing move must not be rejected");
-        assertTrue(move.stream().anyMatch(e -> e instanceof GameEvent.PawnMoved));
+        List<Move> steps = MoveGenerator.generate(board, playerIndex, List.of(1));
+        Move step = null;
+        for (Move m : steps) {
+            if (m instanceof Move.Step s && s.pawnIndex() == placedPpi) {
+                step = s;
+                break;
+            }
+        }
+        assertNotNull(step, "Placed pawn should have a 1-step move");
+
+        List<GameEvent> events = new ArrayList<>();
+        engine.applyMove(step, events);
+        assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.PawnMoved));
     }
 }

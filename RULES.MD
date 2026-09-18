@@ -278,6 +278,10 @@ BENCH → (выставить на угол) → NEWBORN → (первый хо�
 
 ### Цепочка ходов бота
 
+Реализация: единый `MoveSelector` + `GameEngine.playTurn`
+(человек — тот же путь через `HumanSelector`/`submitMove`).
+Правило дополнительного хода — `TurnPolicy` (6 или убийство).
+
 Бот выполняет **все доступные ходы за один ход**:
 1. Бросает кубики
 2. Пока есть кубики:
@@ -335,7 +339,11 @@ BENCH → (выставить на угол) → NEWBORN → (первый хо�
 
 ## 11. Алгоритмы
 
-### findTargetCell(steps, config)
+### PathFinder.find (бывш. findTargetCell)
+
+Реализация: `PathFinder` — единая чистая функция поверх топологии и позиции.
+`Board.findTargetCell` / `findTargetCellFromCorner` — тонкие адаптеры
+(второй — превью с угла для PlaceAndMove, без входа в дом).
 
 **Вход:** пешка, количество шагов, конфигурация
 **Выход:** целевая клетка или null (ход невозможен)
@@ -388,7 +396,10 @@ function findTargetCell(pawn, steps, config):
   return current
 ```
 
-### generateAllMoves(player, dice, board, config)
+### MoveGenerator.generate (бывш. generateAllMoves)
+
+Реализация: `MoveGenerator` + `DiceSet` (distinct-значения, сумма только для
+пары, `withoutOne`). Ходы — sealed-типы `Move.Step` / `Move.Place`.
 
 **Вход:** игрок, кубики, доска, конфигурация
 **Выход:** список доступных ходов
@@ -432,6 +443,9 @@ function generateAllMoves(player, dice, board, config):
 
 ### canPlaceAndMove(player, steps, board, config)
 
+Свёрнуто в `PathFinder`: превью с угла (`findTargetCellFromCorner`)
+с флагом «без входа в дом». Отдельного метода больше нет.
+
 **Вход:** игрок, шаги, доска, конфигурация
 **Выход:** boolean (можно ли выставить и двинуть)
 
@@ -456,7 +470,10 @@ function canPlaceAndMove(player, steps, board, config):
   return true
 ```
 
-### hasWon(player)
+### WinChecker.hasWon (бывш. hasWon)
+
+Единственное место правила победы. Победоносность хода —
+`WinChecker.isWinningMove` (домен) / `isWinningSnapshotMove` (подсветка в UI).
 
 **Вход:** игрок
 **Выход:** boolean (победил ли)
@@ -479,7 +496,11 @@ function hasWon(player):
   return lastPawn.cell == player.corner  // точно на углу
 ```
 
-### renumber(player)
+### pawnProgress + DisplayNumbers (бывш. renumber)
+
+Нумерация `#1..#4` — View-concern: домен отдаёт `Board.pawnProgress`
+(bench −2, newborn −1, поле 0..N, дом 1000+шаг), UI нумерует через
+`DisplayNumbers`. Порядок списков в домене не мутируется.
 
 **Вход:** игрок
 **Выход:** обновлённые номера пешек

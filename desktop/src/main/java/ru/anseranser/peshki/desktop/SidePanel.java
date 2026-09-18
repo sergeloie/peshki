@@ -1,5 +1,6 @@
 package ru.anseranser.peshki.desktop;
 
+import ru.anseranser.peshki.engine.DisplayNumbers;
 import ru.anseranser.peshki.engine.GameState;
 import ru.anseranser.peshki.engine.Move;
 import ru.anseranser.peshki.engine.Pawn;
@@ -9,6 +10,7 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 public class SidePanel extends JPanel {
@@ -98,13 +100,21 @@ public class SidePanel extends JPanel {
             noMoves.setForeground(Color.GRAY);
             movesPanel.add(noMoves);
         } else {
+            GameState.PlayerState cur = state.players().get(state.currentPlayerIndex());
+            Map<Integer, Integer> numbers = DisplayNumbers.assign(cur.pawns());
             List<Move> sorted = new ArrayList<>(moves);
             sorted.sort(Comparator
-                    .comparingInt(Move::pawnIndex)
-                    .thenComparingInt(Move::steps));
+                    .comparingInt((Move m) -> switch (m) {
+                        case Move.Place ignored -> 0;
+                        case Move.Step s -> numbers.get(s.pawnIndex());
+                    })
+                    .thenComparingInt(m -> switch (m) {
+                        case Move.Place p -> p.steps();
+                        case Move.Step s -> s.steps();
+                    }));
             for (Move move : sorted) {
                 MoveButton btn = new MoveButton(formatMove(state, move,
-                        state.players().get(state.currentPlayerIndex()).playerIndex()));
+                        cur.playerIndex(), numbers));
                 btn.addActionListener(e -> onMoveClick.accept(move));
                 movesPanel.add(btn);
                 movesPanel.add(Box.createVerticalStrut(2));
@@ -126,7 +136,8 @@ public class SidePanel extends JPanel {
 
             for (GameState.PawnState pw : ps.pawns()) {
                 if (pw.state() != Pawn.State.BENCH) continue;
-                JLabel icon = createPieceIcon(ps.color(), pw.pawnIndex());
+                JLabel icon = createPieceIcon(ps.color(),
+                        DisplayNumbers.assign(ps.pawns()).get(pw.pawnIndex()));
                 row.add(icon);
             }
             benchPanel.add(row);
@@ -135,20 +146,22 @@ public class SidePanel extends JPanel {
         benchPanel.repaint();
     }
 
-    private String formatMove(GameState state, Move move, int playerIndex) {
+    private String formatMove(GameState state, Move move, int playerIndex,
+                              Map<Integer, Integer> numbers) {
         GameState.CellState target = state.cells().get(move.targetCellIndex());
         boolean kill = target.occupantPlayerIndex() != null
                 && target.occupantPlayerIndex() != playerIndex;
         boolean home = target.type() == ru.anseranser.peshki.engine.Cell.CellType.HOME;
 
-        if (move.pawnIndex() == -1) {
-            String base = move.consumedDice().size() == 2
-                    ? "Place & move " + move.steps() + " steps"
+        if (move instanceof Move.Place place) {
+            String base = place.consumedDice().size() == 2
+                    ? "Place & move " + place.steps() + " steps"
                     : "Place new pawn";
             if (kill) base += " (KILL!)";
             return base;
         }
-        String base = "Pawn #" + move.pawnIndex() + " \u2192 " + move.steps() + " steps";
+        Move.Step step = (Move.Step) move;
+        String base = "Pawn #" + numbers.get(step.pawnIndex()) + " \u2192 " + step.steps() + " steps";
         if (kill) base += " (KILL!)";
         if (home) base += " \u2191 HOME";
         return base;

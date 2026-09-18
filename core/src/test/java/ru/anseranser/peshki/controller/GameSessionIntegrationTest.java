@@ -6,9 +6,11 @@ import ru.anseranser.peshki.engine.Cell;
 import ru.anseranser.peshki.engine.GameConfig;
 import ru.anseranser.peshki.engine.GameEngine;
 import ru.anseranser.peshki.engine.GameState;
+import ru.anseranser.peshki.engine.MoveSelector;
 import ru.anseranser.peshki.engine.Pawn;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GameSessionIntegrationTest {
@@ -16,17 +18,13 @@ class GameSessionIntegrationTest {
     @Test
     void fullBotGameReachesCompletionViaSession() {
         GameEngine engine = new GameEngine(GameConfig.DEFAULT);
-        // Make every player a bot so the session can be driven headlessly.
-        for (int pi = 0; pi < GameConfig.DEFAULT.numberOfPlayers(); pi++) {
-            engine.setHuman(pi, false);
-        }
         GameSession session = new GameSession(engine);
 
         int safety = GameConfig.DEFAULT.maxTurns() + 100;
         int turns = 0;
         while (!session.isGameOver() && turns < safety) {
             session.rollDice();
-            session.playBotTurn();
+            session.playCurrentTurn();
             turns++;
         }
 
@@ -63,17 +61,38 @@ class GameSessionIntegrationTest {
     @Test
     void listenersReceiveEventsDuringPlay() {
         GameEngine engine = new GameEngine(GameConfig.DEFAULT);
-        for (int pi = 0; pi < GameConfig.DEFAULT.numberOfPlayers(); pi++) {
-            engine.setHuman(pi, false);
-        }
         GameSession session = new GameSession(engine);
 
         int[] eventCount = {0};
         session.addListener(e -> eventCount[0]++);
 
         session.rollDice();
-        session.playBotTurn();
+        session.playCurrentTurn();
 
         assertTrue(eventCount[0] > 0, "Listener should have been notified of events");
+    }
+
+    @Test
+    void controllerCanBeSwappedMidGame() {
+        GameEngine engine = new GameEngine(GameConfig.DEFAULT);
+        GameSession session = new GameSession(engine);
+
+        session.rollDice();
+        session.playCurrentTurn();
+
+        // Swap player 1 to a scripted controller mid-game: same interface.
+        MoveSelector firstMove = (context, legalMoves) -> legalMoves.getFirst();
+        session.setController(1, firstMove, false);
+
+        assertSame(firstMove, session.getController(1));
+
+        int turns = 0;
+        while (!session.isGameOver() && turns < 200) {
+            session.rollDice();
+            session.playCurrentTurn();
+            turns++;
+        }
+
+        assertTrue(turns > 0, "Game must progress after the swap");
     }
 }

@@ -1,8 +1,10 @@
 package ru.anseranser.peshki;
 
+import ru.anseranser.peshki.engine.DisplayNumbers;
 import ru.anseranser.peshki.engine.GameState;
 import ru.anseranser.peshki.engine.PlayerColor;
 
+import java.util.HashMap;
 import java.util.Map;
 
 public class ConsoleBoardRenderer {
@@ -23,7 +25,7 @@ public class ConsoleBoardRenderer {
         }
 
         for (GameState.CellState c : state.cells()) {
-            grid[c.y()][c.x()] = cellToString(c);
+            grid[c.y()][c.x()] = cellToString(c, numbers(state));
         }
 
         String[] lines = new String[size];
@@ -33,8 +35,18 @@ public class ConsoleBoardRenderer {
         return lines;
     }
 
-    private static String cellToString(GameState.CellState c) {
+    private static Map<Integer, Map<Integer, Integer>> numbers(GameState state) {
+        Map<Integer, Map<Integer, Integer>> result = new HashMap<>();
+        for (GameState.PlayerState ps : state.players()) {
+            result.put(ps.playerIndex(), DisplayNumbers.assign(ps.pawns()));
+        }
+        return result;
+    }
+
+    private static String cellToString(GameState.CellState c,
+                                       Map<Integer, Map<Integer, Integer>> numbers) {
         if (c.occupantPlayerIndex() == null) return "# ";
-        return ANSI.get(c.occupantColor()) + c.occupantPlayerIndex() + RESET + " ";
+        int display = numbers.get(c.occupantPlayerIndex()).get(c.occupantPawnIndex());
+        return ANSI.get(c.occupantColor()) + display + RESET + " ";
     }
 }

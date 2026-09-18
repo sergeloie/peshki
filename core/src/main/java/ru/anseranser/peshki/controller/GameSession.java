@@ -1,35 +1,47 @@
 package ru.anseranser.peshki.controller;
 
+import ru.anseranser.peshki.ai.BotStrategy;
 import ru.anseranser.peshki.engine.Board;
 import ru.anseranser.peshki.engine.GameConfig;
 import ru.anseranser.peshki.engine.GameEngine;
 import ru.anseranser.peshki.engine.GameState;
 import ru.anseranser.peshki.engine.Move;
+import ru.anseranser.peshki.engine.MoveSelector;
+import ru.anseranser.peshki.engine.TurnPolicy;
 import ru.anseranser.peshki.engine.event.GameEvent;
-import ru.anseranser.peshki.input.MoveCommand;
 import ru.anseranser.peshki.persistence.GameStateSerializer;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
- * UI-agnostic game controller. Owns a {@link GameEngine} and drives it through
- * explicit commands, emitting {@link GameEvent}s to registered listeners.
+ * UI-agnostic game controller. Owns a {@link GameEngine} and one
+ * {@link MoveSelector} per player — humans, bots and future neural nets
+ * are interchangeable mid-game via {@link #setController}.
  *
- * <p>Threading contract: all mutating calls ({@link #rollDice()},
- * {@link #submitMove}, {@link #playBotTurn}) must be invoked from a single
- * owner thread (typically the UI/controller thread). Listeners are notified
- * synchronously on that same thread. Long-running bot turns should be
- * dispatched on a background thread by the owner, never inside this class.
+ * <p>Two pacing modes share one apply path in the engine:
+ * <ul>
+ *   <li>blocking full turn — {@link #playCurrentTurn()} (bots, console humans);</li>
+ *   <li>interactive per-move — {@link #submitMove(Move)} (click UIs).</li>
+ * </ul>
+ * Dice bookkeeping and turn advancement live here, never in UI code.
+ *
+ * <p>Threading contract: all mutating calls must be invoked from a single
+ * owner thread. Listeners are notified synchronously on that same thread.
  */
 public class GameSession {
 
     private final GameEngine engine;
+    private final MoveSelector[] controllers;
     private final List<Consumer<GameEvent>> listeners = new CopyOnWriteArrayList<>();
+    private List<Integer> remainingDice = List.of();
+    private final List<Integer> usedDice = new ArrayList<>();
+    private boolean killedThisTurn;
 
     public GameSession(GameConfig config) {
         this(new GameEngine(config));
@@ -37,10 +49,29 @@ public class GameSession {
 
     public GameSession(GameEngine engine) {
         this.engine = engine;
+        this.controllers = new MoveSelector[engine.getConfig().numberOfPlayers()];
+        BotStrategy bot = new BotStrategy();
+        for (int i = 0; i < controllers.length; i++) {
+            controllers[i] = bot;
+        }
     }
 
     public void addListener(Consumer<GameEvent> listener) {
         listeners.add(listener);
+    }
+
+    /**
+     * Swaps the controller mid-game: human ↔ bot ↔ neural net.
+     *
+     * @param human display hint (shown as "(you)" vs "(bot)" in UIs)
+     */
+    public void setController(int playerIndex, MoveSelector selector, boolean human) {
+        controllers[playerIndex] = selector;
+        engine.setHuman(playerIndex, human);
+    }
+
+    public MoveSelector getController(int playerIndex) {
+        return controllers[playerIndex];
     }
 
     public GameState getState() {
@@ -64,7 +95,7 @@ public class GameSession {
     }
 
     public List<Move> getAvailableMoves() {
-        return engine.getAvailableMoves();
+        return engine.getAvailableMoves(remainingDice);
     }
 
     public List<Move> getAvailableMoves(List<Integer> dice) {
@@ -73,31 +104,83 @@ public class GameSession {
 
     public List<Integer> rollDice() {
         List<Integer> dice = engine.rollDice();
+        remainingDice = new ArrayList<>(dice);
+        usedDice.clear();
+        killedThisTurn = false;
         emit(List.of(new GameEvent.DiceRolled(engine.getCurrentPlayerIndex(), dice)));
         return dice;
     }
 
-    public List<GameEvent> submitMove(MoveCommand command) {
-        List<GameEvent> events = engine.executeHumanCommand(command);
-        emit(events);
-        return events;
-    }
-
-    public List<GameEvent> playBotTurn() {
-        List<GameEvent> events = engine.executeBotTurn();
+    /**
+     * Blocking full turn through the current player's controller.
+     */
+    public List<GameEvent> playCurrentTurn() {
+        List<GameEvent> events = engine.playTurn(controllers[engine.getCurrentPlayerIndex()]);
+        remainingDice = List.of();
+        usedDice.clear();
+        killedThisTurn = false;
         emit(events);
         return events;
     }
 
     /**
+     * Interactive single move (click UIs). Validates against the remaining
+     * dice, applies through the engine's single apply path, and advances
+     * the turn automatically when the dice run out.
+     */
+    public List<GameEvent> submitMove(Move move) {
+        List<GameEvent> events = new ArrayList<>();
+        int playerIndex = engine.getCurrentPlayerIndex();
+
+        if (!engine.getAvailableMoves(remainingDice).contains(move)) {
+            events.add(new GameEvent.MoveRejected("Move is not available"));
+            emit(events);
+            return events;
+        }
+
+        if (engine.applyMove(move, events)) {
+            killedThisTurn = true;
+        }
+        for (int d : move.consumedDice()) {
+            remainingDice.remove(Integer.valueOf(d));
+            usedDice.add(d);
+        }
+
+        if (engine.isGameOver()) {
+            events.add(new GameEvent.GameWon(playerIndex));
+        } else if (remainingDice.isEmpty()
+                || engine.getAvailableMoves(remainingDice).isEmpty()) {
+            boolean extraTurn = TurnPolicy.grantsExtraTurn(
+                    engine.getCurrentDice(), killedThisTurn);
+            events.add(new GameEvent.TurnEnded(playerIndex, extraTurn));
+            engine.advancePlayer(extraTurn);
+            remainingDice = List.of();
+            usedDice.clear();
+            killedThisTurn = false;
+        }
+
+        emit(events);
+        return events;
+    }
+
+    /**
+     * Ends the turn when no moves are available at all (e.g. nothing to
+     * spend the dice on). No kill could have happened.
+     */
+    public void skipTurn() {
+        int playerIndex = engine.getCurrentPlayerIndex();
+        boolean extraTurn = TurnPolicy.grantsExtraTurn(engine.getCurrentDice(), false);
+        engine.advancePlayer(extraTurn);
+        remainingDice = List.of();
+        usedDice.clear();
+        killedThisTurn = false;
+        emit(List.of(new GameEvent.TurnEnded(playerIndex, extraTurn)));
+    }
+
+    /**
      * Completes the current turn and moves to the next player (or grants an
-     * extra turn). The UI must call this after a human turn ends — the engine
-     * does not advance automatically for human moves, mirroring the bot path
-     * which advances internally. Exposing it here keeps the controller the
-     * single boundary a UI talks to (no need to reach into {@link GameEngine}).
-     *
-     * @param extraTurn true if the player earned another turn (rolled a 6 or
-     *                  made a kill); in that case the same player stays on turn
+     * extra turn). Retained for manual pacing; the automatic paths
+     * ({@link #playCurrentTurn}, {@link #submitMove}) advance on their own.
      */
     public void advancePlayer(boolean extraTurn) {
         engine.advancePlayer(extraTurn);

@@ -5,13 +5,11 @@ import ru.anseranser.peshki.engine.GameConfig;
 import ru.anseranser.peshki.engine.GameState;
 import ru.anseranser.peshki.engine.Move;
 import ru.anseranser.peshki.engine.event.GameEvent;
-import ru.anseranser.peshki.input.MoveCommand;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
@@ -23,9 +21,6 @@ public class GameFrame extends JFrame {
     private final int botDelayMs;
 
     private int turnCount = 0;
-    private List<Integer> remainingDice = new ArrayList<>();
-    private List<Integer> usedDice = new ArrayList<>();
-    private boolean extraTurn;
 
     public GameFrame() {
         super("Peshki");
@@ -35,8 +30,8 @@ public class GameFrame extends JFrame {
         botDelayMs = loadBotDelay();
 
         session = new GameSession(GameConfig.DEFAULT);
-        session.addListener(this::onEvent);
-
+        // Player 0 is click-driven; its controller stays idle unless
+        // playCurrentTurn is ever called (e.g. after a mid-game swap to bot).
         boardPanel = new BoardPanel();
         sidePanel = new SidePanel();
 
@@ -64,10 +59,6 @@ public class GameFrame extends JFrame {
         return 800;
     }
 
-    private void onEvent(GameEvent e) {
-        if (e instanceof GameEvent.PawnKilled) extraTurn = true;
-    }
-
     private void refresh() {
         GameState state = session.getState();
         boardPanel.updateState(state);
@@ -76,50 +67,27 @@ public class GameFrame extends JFrame {
                 && !state.players().get(state.currentPlayerIndex()).human();
 
         List<Move> moves = List.of();
-        if (!isBotTurn && !state.gameOver() && !remainingDice.isEmpty()) {
-            moves = session.getAvailableMoves(remainingDice);
+        if (!isBotTurn && !state.gameOver()) {
+            moves = session.getAvailableMoves();
         }
 
         sidePanel.update(state, moves, turnCount, isBotTurn, this::onMoveClick);
     }
 
     private void onMoveClick(Move move) {
-        int playerIndex = session.getCurrentPlayerIndex();
-
-        MoveCommand cmd;
-        if (move.pawnIndex() == -1) {
-            cmd = move.steps() == 0
-                    ? new MoveCommand.PlacePawn(playerIndex, 6)
-                    : new MoveCommand.PlaceAndMove(playerIndex, 6, move.steps());
-        } else {
-            cmd = new MoveCommand.MovePawn(playerIndex, move.pawnIndex(),
-                    move.steps(), move.consumedDice());
-        }
-        session.submitMove(cmd);
-
-        updateRemainingDice(cmd);
-
-        if (!session.isGameOver() && !remainingDice.isEmpty()) {
-            List<Move> moreMoves = session.getAvailableMoves(remainingDice);
-            if (!moreMoves.isEmpty()) {
-                refresh();
-                return;
-            }
-        }
-
-        session.advancePlayer(extraTurn);
-        extraTurn = false;
-        remainingDice.clear();
-        usedDice.clear();
-
+        List<GameEvent> events = session.submitMove(move);
         refresh();
 
-        if (!session.isGameOver()) {
-            SwingUtilities.invokeLater(this::gameLoop);
-        } else {
+        if (session.isGameOver()) {
             JOptionPane.showMessageDialog(this,
                     "Player " + session.getState().winnerPlayerIndex() + " wins!",
                     "Game Over", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        boolean turnEnded = events.stream()
+                .anyMatch(e -> e instanceof GameEvent.TurnEnded);
+        if (turnEnded) {
+            SwingUtilities.invokeLater(this::gameLoop);
         }
     }
 
@@ -140,10 +108,7 @@ public class GameFrame extends JFrame {
             session.rollDice();
             refresh();
             Timer timer = new Timer(botDelayMs, e -> {
-                session.playBotTurn();
-                extraTurn = false;
-                remainingDice.clear();
-                usedDice.clear();
+                session.playCurrentTurn();
                 refresh();
                 if (!session.isGameOver()) {
                     SwingUtilities.invokeLater(this::gameLoop);
@@ -155,42 +120,15 @@ public class GameFrame extends JFrame {
         }
 
         session.rollDice();
-        extraTurn = session.getCurrentDice().contains(6);
-        remainingDice = new ArrayList<>(session.getCurrentDice());
-        usedDice = new ArrayList<>();
         refresh();
 
-        List<Move> moves = session.getAvailableMoves(remainingDice);
-        if (moves.isEmpty()) {
-            session.advancePlayer(extraTurn);
-            extraTurn = false;
-            remainingDice.clear();
-            usedDice.clear();
+        if (session.getAvailableMoves().isEmpty()) {
+            session.skipTurn();
             refresh();
             if (!session.isGameOver()) {
                 SwingUtilities.invokeLater(this::gameLoop);
             }
         }
-    }
-
-    private void updateRemainingDice(MoveCommand cmd) {
-        switch (cmd) {
-            case MoveCommand.PlacePawn c -> {
-                remainingDice.remove(Integer.valueOf(c.diceValue()));
-                usedDice.add(c.diceValue());
-            }
-            case MoveCommand.MovePawn c -> {
-                for (int d : c.consumedDice()) {
-                    remainingDice.remove(Integer.valueOf(d));
-                    usedDice.add(d);
-                }
-            }
-            case MoveCommand.PlaceAndMove c -> {
-                remainingDice.remove(Integer.valueOf(c.placeDice()));
-                remainingDice.remove(Integer.valueOf(c.moveDice()));
-                usedDice.add(c.placeDice());
-                usedDice.add(c.moveDice());
-            }
-        }
+        // Otherwise wait for clicks: each onMoveClick submits one move.
     }
 }

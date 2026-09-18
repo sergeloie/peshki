@@ -1,21 +1,11 @@
 package ru.anseranser.peshki.engine;
 
-import lombok.Getter;
-import lombok.Setter;
-
-@Getter
-@Setter
+/**
+ * Marker for a pawn. Identity = index in the player's pawn list (stable
+ * for the whole game, see ticket 04). Position and moved-flag live in
+ * {@link Position} — the single source of truth, not here.
+ */
 public class Pawn {
 
     public enum State { BENCH, NEWBORN, FIELDER, HOMER }
-
-    private int stepsTraveled;
-
-    public Pawn() {
-        this.stepsTraveled = 0;
-    }
-
-    public void reset() {
-        this.stepsTraveled = 0;
-    }
 }

@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.stream.IntStream;
 
 import static ru.anseranser.peshki.engine.Cell.CellType;
@@ -12,23 +11,19 @@ import static ru.anseranser.peshki.engine.Cell.CellType;
 public class Board {
 
     private final GameConfig config;
-    private final DiceRoller diceRoller;
     private final Cell[] corners;
     private final List<Cell> allCells;
     private final List<List<Pawn>> pawnLists;
-    private final int[][] pawnCells;
+    private final BoardTopology topology;
+    private final Position position;
 
     public Board(GameConfig config) {
-        this(config, new RandomDiceRoller(new Random()));
-    }
-
-    public Board(GameConfig config, DiceRoller diceRoller) {
         this.config = config;
-        this.diceRoller = diceRoller;
         this.corners = new Cell[config.numberOfPlayers()];
         this.allCells = new ArrayList<>();
         this.pawnLists = new ArrayList<>();
-        this.pawnCells = new int[config.numberOfPlayers()][config.numberOfPawns()];
+        this.topology = new BoardTopology(config);
+        this.position = new Position(topology);
 
         initialize();
     }
@@ -36,7 +31,6 @@ public class Board {
     public GameConfig getConfig() { return config; }
     public Cell[] getCorners() { return corners; }
     public List<Cell> getAllCells() { return allCells; }
-    public List<List<Pawn>> getPawnLists() { return pawnLists; }
 
     public Cell getCorner(int playerIndex) { return corners[playerIndex]; }
 
@@ -46,29 +40,25 @@ public class Board {
         return pawnLists.get(playerIndex).get(pawnIndex);
     }
 
+    public BoardTopology getTopology() { return topology; }
+    public Position getPosition() { return position; }
+
     public int getPawnCell(int playerIndex, int pawnIndex) {
-        return pawnCells[playerIndex][pawnIndex];
+        return position.cellOf(playerIndex, pawnIndex);
     }
 
-    public void setPawnCell(int playerIndex, int pawnIndex, int cellIndex) {
-        pawnCells[playerIndex][pawnIndex] = cellIndex;
-    }
-
-    // === State derivation ===
+    // === State derivation (delegated to Position) ===
 
     public boolean isBench(int playerIndex, int pawnIndex) {
-        return pawnCells[playerIndex][pawnIndex] == -1;
+        return position.isBench(playerIndex, pawnIndex);
     }
 
     public boolean isNewborn(int playerIndex, int pawnIndex) {
-        if (isBench(playerIndex, pawnIndex)) return false;
-        return getPawn(playerIndex, pawnIndex).getStepsTraveled() == 0;
+        return position.isNewborn(playerIndex, pawnIndex);
     }
 
     public boolean isHome(int playerIndex, int pawnIndex) {
-        if (isBench(playerIndex, pawnIndex)) return false;
-        int cellIndex = pawnCells[playerIndex][pawnIndex];
-        return allCells.get(cellIndex).getCellType() == CellType.HOME;
+        return position.isHome(playerIndex, pawnIndex);
     }
 
     public boolean isFielder(int playerIndex, int pawnIndex) {
@@ -83,142 +73,74 @@ public class Board {
     }
 
     public int countHomerPawns(int playerIndex) {
-        int count = 0;
-        for (int i = 0; i < config.numberOfPawns(); i++) {
-            if (isHome(playerIndex, i)) count++;
+        return position.countHome(playerIndex);
+    }
+
+    /**
+     * Closeness to home (ticket 05, RULES.MD §3). Higher = closer to winning:
+     * bench -2, newborn -1, fielder 0..ringSize-1 (ring steps already
+     * travelled from own corner), homer 1000+homeStep. View layers use this
+     * to number pawns #1..#4; the domain never displays or mutates by it.
+     */
+    public int pawnProgress(int playerIndex, int pawnIndex) {
+        if (position.isBench(playerIndex, pawnIndex)) return -2;
+        if (position.isNewborn(playerIndex, pawnIndex)) return -1;
+        int cell = position.cellOf(playerIndex, pawnIndex);
+        if (topology.isHomeCellIndex(cell)) {
+            return 1000 + topology.homeStep(playerIndex, cell);
         }
-        return count;
+        int ring = topology.ringSize();
+        int corner = topology.cornerRingIndex(playerIndex);
+        return (cell - corner - 1 + ring) % ring;
     }
 
     // === Queries ===
 
-    public List<int[]> getMovablePawns(int playerIndex) {
-        List<int[]> result = new ArrayList<>();
+    public List<PawnId> getMovablePawns(int playerIndex) {
+        List<PawnId> result = new ArrayList<>();
         for (int i = 0; i < config.numberOfPawns(); i++) {
             if (!isBench(playerIndex, i)) {
-                result.add(new int[]{i});
+                result.add(new PawnId(playerIndex, i));
             }
         }
         return result;
     }
 
-    public List<int[]> getBenchPawns(int playerIndex) {
-        List<int[]> result = new ArrayList<>();
+    public List<PawnId> getBenchPawns(int playerIndex) {
+        List<PawnId> result = new ArrayList<>();
         for (int i = 0; i < config.numberOfPawns(); i++) {
             if (isBench(playerIndex, i)) {
-                result.add(new int[]{i});
+                result.add(new PawnId(playerIndex, i));
             }
         }
         return result;
     }
 
-    public boolean isCornerFree(int playerIndex) {
-        Cell corner = corners[playerIndex];
-        return !corner.isOccupied();
-    }
-
-    public boolean isCornerOccupiedByEnemy(int playerIndex) {
-        Cell corner = corners[playerIndex];
-        return corner.isOccupied() && corner.getOccupantPlayerIndex() != playerIndex;
-    }
-
-    // === Movement ===
+    // === Movement (thin adapters over PathFinder) ===
 
     public Cell findTargetCell(int playerIndex, int pawnIndex, int steps) {
-        int cellIndex = pawnCells[playerIndex][pawnIndex];
-        if (cellIndex == -1) return null;
-
-        Cell current = allCells.get(cellIndex);
-        Cell corner = corners[playerIndex];
-        boolean inHome = isHome(playerIndex, pawnIndex);
-        boolean isLastLapPawn = !inHome
-                && countHomerPawns(playerIndex) == config.numberOfPawns() - 1;
-
-        for (int i = 0; i < steps; i++) {
-            Cell next;
-
-            if (!inHome) {
-                if (current == corner && !isNewborn(playerIndex, pawnIndex)) {
-                    if (isLastLapPawn) {
-                        return i == steps - 1 ? corner : null;
-                    }
-                    inHome = true;
-                    next = current.getNextHomeCell();
-                } else {
-                    next = current.getNextFieldCell();
-                    if (next == corner) {
-                        if (isLastLapPawn) {
-                            return i == steps - 1 ? corner : null;
-                        }
-                        inHome = true;
-                    }
-                }
-            } else {
-                next = current.getNextHomeCell();
-            }
-
-            if (next == null) return null;
-
-            if (i < steps - 1 && next.isOccupied()) return null;
-
-            if (i == steps - 1 && next.isOccupied()
-                    && next.getOccupantPlayerIndex() == playerIndex) return null;
-
-            current = next;
-        }
-
-        return current;
+        Integer target = PathFinder.find(topology, position, playerIndex,
+                position.cellOf(playerIndex, pawnIndex),
+                steps, !position.isNewborn(playerIndex, pawnIndex));
+        return target == null ? null : allCells.get(target);
     }
 
     public Cell findTargetCellFromCorner(int playerIndex, int steps) {
-        Cell corner = corners[playerIndex];
-        Cell current = corner;
-        boolean isLastLapPawn = countHomerPawns(playerIndex) == config.numberOfPawns() - 1;
-
-        for (int i = 0; i < steps; i++) {
-            Cell next = current.getNextFieldCell();
-            if (next == corner) {
-                if (isLastLapPawn) {
-                    return i == steps - 1 ? corner : null;
-                }
-            }
-            if (next == null) return null;
-            if (i < steps - 1 && next.isOccupied()) return null;
-            if (i == steps - 1 && next.isOccupied()
-                    && next.getOccupantPlayerIndex() == playerIndex) return null;
-            current = next;
-        }
-        return current;
+        Integer target = PathFinder.find(topology, position, playerIndex,
+                topology.cornerRingIndex(playerIndex), steps, false);
+        return target == null ? null : allCells.get(target);
     }
 
     public void movePawn(int playerIndex, int pawnIndex, Cell target) {
-        int oldCellIndex = pawnCells[playerIndex][pawnIndex];
-        if (oldCellIndex != -1) {
-            allCells.get(oldCellIndex).clearOccupant();
-        }
-        target.setOccupant(playerIndex, pawnIndex);
-        pawnCells[playerIndex][pawnIndex] = target.getIndex();
-        getPawn(playerIndex, pawnIndex).setStepsTraveled(
-                getPawn(playerIndex, pawnIndex).getStepsTraveled() + 1);
+        position.move(playerIndex, pawnIndex, target.getIndex());
     }
 
     public void placePawn(int playerIndex, int pawnIndex, Cell corner) {
-        corner.setOccupant(playerIndex, pawnIndex);
-        pawnCells[playerIndex][pawnIndex] = corner.getIndex();
-        getPawn(playerIndex, pawnIndex).reset();
+        position.place(playerIndex, pawnIndex, corner.getIndex());
     }
 
     public void capturePawn(int victimPlayerIndex, int victimPawnIndex) {
-        int cellIndex = pawnCells[victimPlayerIndex][victimPawnIndex];
-        if (cellIndex != -1) {
-            allCells.get(cellIndex).clearOccupant();
-        }
-        pawnCells[victimPlayerIndex][victimPawnIndex] = -1;
-        getPawn(victimPlayerIndex, victimPawnIndex).reset();
-
-        List<Pawn> list = pawnLists.get(victimPlayerIndex);
-        Pawn victim = list.remove(victimPawnIndex);
-        list.add(victim);
+        position.capture(victimPlayerIndex, victimPawnIndex);
     }
 
     // === Board generation ===
@@ -228,7 +150,6 @@ public class Board {
             List<Pawn> list = new ArrayList<>();
             for (int j = 0; j < config.numberOfPawns(); j++) {
                 list.add(new Pawn());
-                pawnCells[i][j] = -1;
             }
             pawnLists.add(list);
         }
@@ -296,23 +217,19 @@ public class Board {
     // === Restore from GameState ===
 
     public void restore(GameState state) {
-        for (Cell c : allCells) {
-            c.clearOccupant();
-        }
-        for (int[] arr : pawnCells) {
-            java.util.Arrays.fill(arr, -1);
-        }
+        position.clearAll();
 
         for (GameState.PlayerState ps : state.players()) {
             int pi = ps.playerIndex();
             for (GameState.PawnState pws : ps.pawns()) {
                 int ppi = pws.pawnIndex();
-                Pawn pawn = getPawn(pi, ppi);
-                pawn.setStepsTraveled(pws.stepsTraveled());
                 int ci = pws.cellIndex();
-                pawnCells[pi][ppi] = ci;
-                if (ci >= 0) {
-                    allCells.get(ci).setOccupant(pi, ppi);
+                if (ci < 0) {
+                    position.capture(pi, ppi);
+                } else if (pws.stepsTraveled() > 0) {
+                    position.move(pi, ppi, ci);
+                } else {
+                    position.place(pi, ppi, ci);
                 }
             }
         }
