@@ -94,6 +94,11 @@ public class GameSession {
         return engine.getCurrentDice();
     }
 
+    /** Dice not yet spent in the current turn (for selectors and UI pacing). */
+    public List<Integer> getRemainingDice() {
+        return List.copyOf(remainingDice);
+    }
+
     public List<Move> getAvailableMoves() {
         return engine.getAvailableMoves(remainingDice);
     }

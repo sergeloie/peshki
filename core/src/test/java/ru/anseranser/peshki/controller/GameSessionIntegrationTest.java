@@ -6,8 +6,12 @@ import ru.anseranser.peshki.engine.Cell;
 import ru.anseranser.peshki.engine.GameConfig;
 import ru.anseranser.peshki.engine.GameEngine;
 import ru.anseranser.peshki.engine.GameState;
+import ru.anseranser.peshki.engine.Move;
 import ru.anseranser.peshki.engine.MoveSelector;
 import ru.anseranser.peshki.engine.Pawn;
+import ru.anseranser.peshki.engine.event.GameEvent;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -70,6 +74,38 @@ class GameSessionIntegrationTest {
         session.playCurrentTurn();
 
         assertTrue(eventCount[0] > 0, "Listener should have been notified of events");
+    }
+
+    @Test
+    void stepwiseSubmitLoopCompletesATurn() {
+        GameEngine engine = new GameEngine(GameConfig.DEFAULT);
+        GameSession session = new GameSession(engine);
+
+        session.rollDice();
+        boolean turnEndedClean = false;
+        int guard = 0;
+        while (!turnEndedClean && guard++ < 50) {
+            List<Move> legal = session.getAvailableMoves();
+            if (legal.isEmpty()) {
+                if (session.getRemainingDice().isEmpty()) {
+                    session.rollDice();
+                } else {
+                    session.skipTurn();
+                }
+                continue;
+            }
+            int current = session.getCurrentPlayerIndex();
+            List<GameEvent> events = session.submitMove(legal.getFirst());
+            if (events.stream().anyMatch(
+                    e -> e instanceof GameEvent.TurnEnded te && !te.extraTurn())) {
+                turnEndedClean = true;
+                assertEquals((current + 1) % GameConfig.DEFAULT.numberOfPlayers(),
+                        session.getCurrentPlayerIndex(),
+                        "Clean TurnEnded must advance to the next player");
+            }
+        }
+
+        assertTrue(turnEndedClean, "Stepwise submits must close the turn with TurnEnded");
     }
 
     @Test
