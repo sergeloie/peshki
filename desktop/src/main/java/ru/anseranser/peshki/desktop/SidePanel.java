@@ -4,6 +4,7 @@ import ru.anseranser.peshki.engine.DisplayNumbers;
 import ru.anseranser.peshki.engine.GameState;
 import ru.anseranser.peshki.engine.Move;
 import ru.anseranser.peshki.engine.Pawn;
+import ru.anseranser.peshki.engine.WinChecker;
 
 import javax.swing.*;
 import java.awt.*;
@@ -164,6 +165,7 @@ public class SidePanel extends JPanel {
         String base = "Pawn #" + numbers.get(step.pawnIndex()) + " \u2192 " + step.steps() + " steps";
         if (kill) base += " (KILL!)";
         if (home) base += " \u2191 HOME";
+        if (WinChecker.isWinningSnapshotMove(state, move, playerIndex, state.config())) base += " (WIN!)";
         return base;
     }
 
