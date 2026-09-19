@@ -14,7 +14,7 @@ class GameConfigTest {
         assertEquals(4, config.numberOfPawns());
         assertEquals(2, config.numberOfDice());
         assertEquals(6, config.numberOfSidesOnDice());
-        assertEquals(5000, config.maxTurns());
+        assertEquals(10000, config.maxTurns());
     }
 
     @Test

@@ -8,7 +8,7 @@ public record GameConfig(
         int numberOfSidesOnDice,
         int maxTurns
 ) {
-    public static final GameConfig DEFAULT = new GameConfig(8, 4, 4, 2, 6, 5000);
+    public static final GameConfig DEFAULT = new GameConfig(8, 4, 4, 2, 6, 10000);
 
     public GameConfig {
         if (sideLength < 2) {
