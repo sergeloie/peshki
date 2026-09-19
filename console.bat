@@ -1,7 +1,8 @@
 @echo off
 setlocal
 
-set PROJECT_DIR=C:\Users\admin\IdeaProjects\peshki
+rem Project root = directory containing this script (no hardcoded paths).
+set PROJECT_DIR=%~dp0
 
 echo ===============================
 echo  Rebuild project...
@@ -20,6 +21,6 @@ echo.
 echo ===============================
 echo  Launching app...
 echo ===============================
-call "%PROJECT_DIR%\console\build\install\console\bin\console.bat"
+call "%PROJECT_DIR%console\build\install\console\bin\console.bat"
 
 endlocal
