@@ -10,6 +10,7 @@ function fixedRandom(values: number[]): () => number {
 describe('Game dice and the single apply path', () => {
   it('rolls the configured number of dice from the injected RNG', () => {
     const game = new Game({ random: fixedRandom([0.4, 0.6]) });
+    game.board.position.move(0, 0, 3);
 
     const events = game.rollDice();
 
@@ -19,12 +20,13 @@ describe('Game dice and the single apply path', () => {
 
   it('refuses a second roll while dice remain', () => {
     const game = new Game({ random: fixedRandom([0.4, 0.6]) });
+    game.board.position.move(0, 0, 3);
     game.rollDice();
 
     expect(game.rollDice()).toEqual([{ type: 'moveRejected', reason: 'unspent dice remain' }]);
   });
 
-  it('spends the die and ends the turn when the last die is spent', () => {
+  it('spends one die and keeps the turn while dice remain', () => {
     const game = new Game({ random: fixedRandom([0.4, 0.6]) });
     game.board.position.move(0, 0, 3);
     game.rollDice();
@@ -51,13 +53,15 @@ describe('Game dice and the single apply path', () => {
     expect(game.board.position.cellOf(0, 0)).toBe(7);
   });
 
-  it('drops the dice when no legal move exists', () => {
+  it('ends the turn on the roll itself when no legal move exists', () => {
     const game = new Game({ random: fixedRandom([0.4, 0.6]) });
-    game.rollDice();
+
+    const events = game.rollDice();
 
     expect(game.legalMoves()).toEqual([]);
-    expect(game.pass()).toEqual([{ type: 'turnEnded', playerIndex: 0 }]);
+    expect(events.map((event) => event.type)).toEqual(['diceRolled', 'turnEnded']);
     expect(game.remainingDice).toEqual([]);
+    expect(game.playerIndex).toBe(1);
   });
 
   it('refuses to pass while a legal move exists', () => {
@@ -65,6 +69,19 @@ describe('Game dice and the single apply path', () => {
     game.rollDice();
 
     expect(game.pass()).toEqual([{ type: 'moveRejected', reason: 'legal moves are available' }]);
+  });
+
+  it('plays a whole non-human seat turn through the single apply path', () => {
+    const game = new Game({ random: fixedRandom([0.4, 0.6]) });
+    game.board.position.move(0, 0, 3);
+
+    const events = game.playSeatTurn();
+
+    expect(game.isHuman(0)).toBe(true);
+    expect(game.isHuman(1)).toBe(false);
+    expect(events.some((event) => event.type === 'diceRolled')).toBe(true);
+    expect(game.board.position.cellOf(0, 0)).toBe(10);
+    expect(game.playerIndex).toBe(1);
   });
 
   it('seededRandom is deterministic and stays in [0, 1)', () => {

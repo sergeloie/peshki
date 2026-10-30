@@ -15,3 +15,7 @@ export type { GameEvent } from './events';
 export { seededRandom } from './rng';
 export { Game } from './game';
 export type { GameOptions } from './game';
+export { hasWon } from './win';
+export { grantsExtraTurn } from './turn-policy';
+export { firstLegalMove } from './selectors';
+export type { MoveSelector } from './selectors';

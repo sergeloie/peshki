@@ -4,6 +4,7 @@ export interface GameConfig {
   numberOfPawns: number;
   numberOfDice: number;
   numberOfSidesOnDice: number;
+  maxTurns: number;
 }
 
 export const DEFAULT_CONFIG: GameConfig = Object.freeze({
@@ -12,6 +13,7 @@ export const DEFAULT_CONFIG: GameConfig = Object.freeze({
   numberOfPawns: 4,
   numberOfDice: 2,
   numberOfSidesOnDice: 6,
+  maxTurns: 10000,
 });
 
 export interface DerivedConfig {
@@ -38,4 +40,5 @@ export function validateConfig(config: GameConfig): void {
   if (config.numberOfSidesOnDice < 1) {
     throw new RangeError(`numberOfSidesOnDice must be >= 1, got ${config.numberOfSidesOnDice}`);
   }
+  if (config.maxTurns < 1) throw new RangeError(`maxTurns must be >= 1, got ${config.maxTurns}`);
 }
