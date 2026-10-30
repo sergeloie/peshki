@@ -2,6 +2,7 @@ import type { Platform } from '../src/platform/ysdk';
 
 export function createFakePlatform() {
   const calls: string[] = [];
+  const writes: string[] = [];
 
   const platform: Platform = {
     boot: async () => {
@@ -16,8 +17,9 @@ export function createFakePlatform() {
     setGameplayActive: (active) => {
       calls.push(`setGameplayActive:${active}`);
     },
-    saveProgress: async () => {
+    saveProgress: async (data) => {
       calls.push('saveProgress');
+      writes.push(data);
     },
     loadProgress: async () => null,
     language: () => 'ru',
@@ -33,5 +35,5 @@ export function createFakePlatform() {
     },
   };
 
-  return { platform, calls };
+  return { platform, calls, writes };
 }
