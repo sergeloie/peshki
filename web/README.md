@@ -15,14 +15,20 @@ npm run package  # zip dist/ into peshki.zip (reproducible, ASCII paths)
 ## Local development with the real SDK
 
 `index.html` loads `/sdk.js`, which only exists inside the Yandex Games environment. Run the
-official dev proxy instead of `npm run dev` when the SDK is needed:
+official dev proxy in front of the dev server when the SDK is needed (`--dev-mode=true` needs no
+account and no draft game):
 
 ```sh
-npx @yandex-games/sdk-dev-proxy -p 8080
+npm run dev                                                        # terminal 1, port 5173
+npx @yandex-games/sdk-dev-proxy -h http://localhost:5173 --dev-mode=true   # terminal 2
 ```
 
+The game then opens at `https://localhost`; the proxy listens on port `8080` by default
+(`--port` changes it). To serve built files instead of the dev server, point the proxy at the
+folder: `npx @yandex-games/sdk-dev-proxy -p dist --dev-mode=true`.
+
 The proxy serves `sdk.js` and mocks the SDK calls, so `YaGames.init()` succeeds and the debug panel
-shows `LoadingAPI.ready()`. Project configuration for the proxy is not committed yet.
+shows `LoadingAPI.ready()`.
 
 Without the proxy the page still boots: the platform facade reports local mode in the console and
 every SDK call becomes a no-op.
