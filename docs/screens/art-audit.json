@@ -6,7 +6,7 @@
     "pass": true
   },
   "staticSceneCost": {
-    "renderTreeNodes": 153,
+    "renderTreeNodes": 154,
     "sprites": 81,
     "graphics": 35,
     "filtersInTree": 0,
@@ -16,7 +16,7 @@
     "artBytes": 216412,
     "artBudgetBytes": 3000000,
     "artBudgetPass": true,
-    "totalRequestBytes": 7888736,
+    "totalRequestBytes": 7899919,
     "topResources": [
       {
         "resource": "pixi__js.js?v=5641b780",

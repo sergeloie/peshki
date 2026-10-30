@@ -28,6 +28,8 @@ export interface GameOutcome {
 export interface GameScreen {
   root: Container;
   layout(width: number, height: number): void;
+  /** §7: while any dialog is open the live HUD row hides (dice, roll, pause, message). */
+  setHudSuppressed(value: boolean): void;
   /** Stops the ticker work and releases the tree; used when leaving the game. */
   dispose(): void;
 }
@@ -93,9 +95,11 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
   }
 
   const boardLayer = new Container();
+  boardLayer.label = 'board-layer';
   boardLayer.addChild(boardView.root, pawnViews.root);
 
   const root = new Container();
+  root.label = 'game-screen';
   root.addChild(boardLayer, hud.root, tutorial.root);
   root.eventMode = 'static';
 
@@ -475,6 +479,10 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
 
   return {
     root,
+    setHudSuppressed(value) {
+      hud.setLive(!value);
+      tutorial.setSuppressed(value);
+    },
     layout(width, height) {
       gameLayout = computeGameLayout(width, height);
       geometry = createBoardGeometry(gameLayout.board.size, gameLayout.board.size);

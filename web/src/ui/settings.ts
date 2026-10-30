@@ -7,7 +7,7 @@ import { attachKeyGroup, detachKeyGroup } from './keys';
 import type { KeyGroup } from './keys';
 import { createButton } from './widgets';
 import type { Button } from './widgets';
-import { drawCardPlate } from './card';
+import { drawCardPlate, fadeScrimIn, SCRIM_ALPHA, SCRIM_FILL } from './card';
 
 export interface SettingsState {
   soundOn: boolean;
@@ -104,6 +104,7 @@ export function createSettingsScreen(initial: SettingsState, handlers: SettingsH
 
   let current = initial;
   let cardWidth = 340;
+  let cardHeight = CARD_HEIGHT;
   let baseFont = 16;
   let tiles: Button[] = [];
 
@@ -112,6 +113,13 @@ export function createSettingsScreen(initial: SettingsState, handlers: SettingsH
     focusable: () => tiles,
     onEscape: () => handlers.onClose(),
   };
+
+  // tap-outside-the-card closes the settings, same as Escape
+  let tapPoint = { x: 0, y: 0 };
+  root.on('pointertap', (event) => {
+    tapPoint = event.getLocalPosition(root);
+    if (Math.abs(tapPoint.x) > cardWidth / 2 || Math.abs(tapPoint.y) > cardHeight / 2) handlers.onClose();
+  });
 
   function render(): void {
     tiles = [];
@@ -197,9 +205,12 @@ export function createSettingsScreen(initial: SettingsState, handlers: SettingsH
       cardWidth = Math.round(isPortrait ? Math.min(width - 40, 340) : 460);
       title.style.fontSize = Math.round(baseFont * 2);
       title.position.set(0, -CARD_HEIGHT / 2 + 26 + 17);
-      dim.clear().rect(0, 0, width, height).fill({ color: COLORS.panel, alpha: 0.7 });
+      dim
+        .clear()
+        .rect(-width / 2, -height / 2, width, height)
+        .fill({ color: SCRIM_FILL, alpha: SCRIM_ALPHA });
       root.position.set(width / 2, height / 2);
-      root.eventMode = 'static'; // the dim itself swallows menu taps
+      root.eventMode = 'static'; // the scrim itself swallows menu taps
       root.hitArea = new Rectangle(-width / 2, -height / 2, width, height);
       drawCardPlate(card, cardWidth, CARD_HEIGHT);
       render();
@@ -208,7 +219,10 @@ export function createSettingsScreen(initial: SettingsState, handlers: SettingsH
       current = state;
       if (root.parent !== null) render();
     },
-    attach: () => attachKeyGroup(group),
+    attach: () => {
+      attachKeyGroup(group);
+      fadeScrimIn(dim);
+    },
     detach: () => detachKeyGroup(group),
   };
 }

@@ -109,6 +109,8 @@ export interface HudView {
   root: Container;
   layout(width: number, height: number, geometry: GameLayout): void;
   update(state: HudState): void;
+  /** §7: while a dialog is open the live row (dice, roll, pause, message) must not show. */
+  setLive(value: boolean): void;
   /** §6 unspent-die pulse; drive from a ticker with delta ms. */
   tick(elapsedMs: number): void;
 }
@@ -197,6 +199,7 @@ export function createHud(
   handlers: { onRoll(): void; onSum(): void; onPause?(): void },
 ): HudView {
   const root = new Container();
+  root.label = 'hud';
 
   const topPanel = new Graphics();
   const trayPanel = new Graphics();
@@ -258,17 +261,16 @@ export function createHud(
   pauseButton.on('pointertap', () => handlers.onPause?.());
   pauseButton.visible = handlers.onPause !== undefined;
 
+  // §7 dialog rule: everything live — dice, roll, pause, message — hides as one layer
+  const liveLayer = new Container();
+  liveLayer.label = 'hud-live';
+  liveLayer.addChild(diceShadows, diceLayer, dicePulse, sumChip, message, rollButton, pauseButton);
+
   root.addChild(
     topPanel,
     trayPanel,
     sidePanel,
-    diceShadows,
-    diceLayer,
-    dicePulse,
-    sumChip,
-    message,
-    rollButton,
-    pauseButton,
+    liveLayer,
     // player rows last: the panels must not cover the list or the top bar
     ...chips.map((chip) => chip.sprite),
   );
@@ -411,6 +413,9 @@ function strokeArc(
 
   return {
     root,
+    setLive(value) {
+      liveLayer.visible = value;
+    },
     layout(nextWidth, nextHeight, next) {
       geometry = next;
       width = nextWidth;
@@ -521,8 +526,7 @@ function strokeArc(
         diceShadows.addChild(sprite);
       }
     },
-    update(state) {
-      remaining = [...state.remaining];
+    update(state) {      remaining = [...state.remaining];
       diceLayer.clear();
       // §6: the physical dice always sit on the tray; before the first roll they
       // rest at half light so the primary interaction is never an empty tray

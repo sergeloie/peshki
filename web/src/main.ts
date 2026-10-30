@@ -131,12 +131,15 @@ async function main() {
       title: t('howto.title'),
       label: t(HINT_LABEL_KEYS[concept]),
       body: t(HINT_TEXT_KEYS[concept]),
+      // page counter: digits only, language-neutral
+      footer: `${page + 1} / ${HINT_ORDER.length}`,
       actions: [
         {
           label: last ? t('common.ok') : t('howto.next'),
           primary: true,
           onTap: () => (last ? closeDialog(howtoDialog) : openHowto(page + 1)),
         },
+        { label: t('common.close'), onTap: () => closeDialog(howtoDialog) },
       ],
     });
     if (!dialogStack.includes(howtoDialog)) openDialog(howtoDialog);
@@ -209,11 +212,18 @@ async function main() {
 
   /* ---- shared modal stack ---- */
 
+  let hudSuppressedCount = 0;
+
   function openDialog(modal: Modal): void {
     app.stage.addChild(modal.root);
     modal.layout(app.screen.width, app.screen.height);
     modal.attach();
     dialogStack.push(modal);
+    // every in-game dialog (pause, how-to over pause, results) hides the live flow
+    if (screen !== null) {
+      hudSuppressedCount += 1;
+      screen.setHudSuppressed(hudSuppressedCount > 0);
+    }
   }
 
   function closeDialog(modal: Modal): void {
@@ -221,6 +231,10 @@ async function main() {
     if (index >= 0) dialogStack.splice(index, 1);
     app.stage.removeChild(modal.root);
     modal.detach();
+    if (screen !== null) {
+      hudSuppressedCount = Math.max(0, hudSuppressedCount - 1);
+      screen.setHudSuppressed(hudSuppressedCount > 0);
+    }
     modal.dispose?.();
   }
 

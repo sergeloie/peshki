@@ -13,6 +13,8 @@ export interface TutorialBanner {
   /** Shows one concept line; a re-show replaces the text. */
   show(text: string): void;
   hide(): void;
+  /** Dialog rule: the hint strip must not look tappable behind a scrim. */
+  setSuppressed(value: boolean): void;
 }
 
 /**
@@ -79,9 +81,19 @@ export function createTutorialBanner(onDismiss: () => void): TutorialBanner {
   }
 
   let attached = false;
+  let shown = false;
+  let suppressed = false;
+
+  function applyVisibility(): void {
+    root.visible = shown && !suppressed;
+  }
 
   return {
     root,
+    setSuppressed(value) {
+      suppressed = value;
+      applyVisibility();
+    },
     layout(width, height, game) {
       surface.width = width;
       surface.height = height;
@@ -90,7 +102,8 @@ export function createTutorialBanner(onDismiss: () => void): TutorialBanner {
     },
     show(next) {
       text.text = next;
-      root.visible = true;
+      shown = true;
+      applyVisibility();
       if (!attached) {
         attached = true;
         attachKeyGroup(group);
@@ -98,7 +111,8 @@ export function createTutorialBanner(onDismiss: () => void): TutorialBanner {
       place();
     },
     hide() {
-      root.visible = false;
+      shown = false;
+      applyVisibility();
       if (attached) {
         attached = false;
         detachKeyGroup(group);
