@@ -18,6 +18,7 @@ import { createRenderer } from './render/app';
 import { createTableSurface } from './render/table-surface';
 import { loadFonts } from './render/fonts';
 import { audio } from './render/audio';
+import { configureSafeArea } from './render/hud';
 import { pickLanguage, setLanguage, t } from './i18n';
 import { createGameScreen } from './ui/game-screen';
 import type { GameOutcome, GameScreen } from './ui/game-screen';
@@ -59,6 +60,24 @@ async function main() {
 
   // Pixi Text rasterises on first draw: bundle fonts must land before any canvas
   await loadFonts();
+
+  // §7 safe-area insets from the browser env; re-read with every resize
+  const readSafeArea = (): void => {
+    const probe = document.createElement('div');
+    probe.style.cssText =
+      'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+    document.body.appendChild(probe);
+    const style = window.getComputedStyle(probe);
+    const parse = (value: string): number => Number.parseFloat(value) || 0;
+    configureSafeArea({
+      top: parse(style.paddingTop),
+      right: parse(style.paddingRight),
+      bottom: parse(style.paddingBottom),
+      left: parse(style.paddingLeft),
+    });
+    probe.remove();
+  };
+  readSafeArea();
 
   const app = await createRenderer();
   const table = createTableSurface();
@@ -338,6 +357,7 @@ async function main() {
   menu.layout(app.screen.width, app.screen.height);
 
   app.renderer.on('resize', (width: number, height: number) => {
+    readSafeArea();
     table.layout(width, height);
     menu.layout(width, height);
     screen?.layout(width, height);

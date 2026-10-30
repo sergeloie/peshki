@@ -6,6 +6,7 @@ import { attachKeyGroup, detachKeyGroup } from './keys';
 import type { KeyGroup } from './keys';
 import { createButton } from './widgets';
 import type { GameLayout } from '../render/hud';
+import { getSafeArea } from '../render/hud';
 
 export interface TutorialBanner {
   root: Container;
@@ -50,7 +51,8 @@ export function createTutorialBanner(onDismiss: () => void): TutorialBanner {
       text.style.wordWrapWidth = bannerWidth - pad * 2;
       const bannerHeight = pad * 2 + text.height + 12 + 46;
       const trayPad = game.isTv ? 1.5 : 1;
-      const y = height - Math.round(224 * trayPad) - bannerHeight / 2 - 8;
+      const bottom = Math.max(Math.round(8 * trayPad), getSafeArea().bottom); // §7 safe-area env
+      const y = height - bottom - Math.round(224 * trayPad) - bannerHeight / 2 - 8;
       root.position.set(width / 2, y);
       text.position.set(-bannerWidth / 2 + pad, -bannerHeight / 2 + pad);
       button.root.position.set(0, bannerHeight / 2 - pad - 23);

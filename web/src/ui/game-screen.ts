@@ -20,6 +20,9 @@ import { format, t } from '../i18n';
 import { seatLabel } from './players';
 import { createTutorialBanner } from './tutorial';
 import { HINT_TEXT_KEYS } from './hints';
+import { attachKeyGroup, detachKeyGroup } from './keys';
+import type { KeyGroup } from './keys';
+import type { Button } from './widgets';
 
 export type GameOutcomeKind = 'win' | 'lose' | 'draw';
 
@@ -174,15 +177,88 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
         game.isHuman(game.playerIndex) && !busy ? pendingTargets() : [],
         null,
       );
-      return;
+    } else {
+      const sprite = pawnViews.sprite(selected.playerIndex, selected.pawnIndex);
+      boardView.highlight(pending.map((move) => move.targetCellIndex), { x: sprite.x, y: sprite.y });
     }
-    const sprite = pawnViews.sprite(selected.playerIndex, selected.pawnIndex);
-    boardView.highlight(pending.map((move) => move.targetCellIndex), { x: sprite.x, y: sprite.y });
+    rebuildFocus();
   }
 
   function pendingTargets(): number[] {
     return pending.map((move) => move.targetCellIndex);
   }
+
+  /* ---- TV / keyboard path (#8): arrows walk roll + legal targets, OK plays ---- */
+
+  interface FocusPair {
+    key: string;
+    button: Button;
+    apply: (value: boolean) => void;
+  }
+
+  let focusPairs: FocusPair[] = [];
+  let focusKey: string | null = null;
+
+  function makeFocusPair(key: string, apply: (value: boolean) => void, activate: () => void): FocusPair {
+    const pair: FocusPair = {
+      key,
+      apply,
+      button: {
+        root: root, // keys.ts never dereferences it; the screen is the group root
+        setLabel() {},
+        setFont() {},
+        setSize() {},
+        setFocused(value) {
+          if (value) focusKey = key;
+          else if (focusKey === key) focusKey = null;
+          apply(value);
+        },
+        isFocused: () => focusKey === key,
+        activate,
+      },
+    };
+    return pair;
+  }
+
+  /** Rebuilds the focusable list from the live state; keeps focus when an item survives. */
+  function rebuildFocus(): void {
+    const pairs: FocusPair[] = [];
+    if (!finished && !game.gameOver && game.isHuman(game.playerIndex)) {
+      if (!busy && game.remainingDice.length === 0) {
+        pairs.push(makeFocusPair('roll', (v) => hud.setRollFocused(v), () => onRoll()));
+      }
+      const seen = new Set<number>();
+      for (const move of pending) {
+        if (seen.has(move.targetCellIndex)) continue;
+        seen.add(move.targetCellIndex);
+        const cell = move.targetCellIndex;
+        pairs.push(
+          makeFocusPair(
+            `cell:${cell}`,
+            (v) => boardView.focusCell(v ? cell : null),
+            () => {
+              const candidates = pending.filter((candidate) => candidate.targetCellIndex === cell);
+              const chosen =
+                selected === null
+                  ? candidates[0]
+                  : (candidates.find((candidate) => candidate.pawnIndex === selected?.pawnIndex) ?? candidates[0]);
+              if (chosen !== undefined) void play(chosen);
+            },
+          ),
+        );
+      }
+    }
+    const stillThere = focusKey !== null && pairs.some((pair) => pair.key === focusKey);
+    if (!stillThere) {
+      const lost = focusPairs.find((pair) => pair.key === focusKey);
+      lost?.apply(false);
+      focusKey = null;
+    }
+    focusPairs = pairs;
+  }
+
+  const gameGroup: KeyGroup = { root, focusable: () => focusPairs.map((pair) => pair.button) };
+  attachKeyGroup(gameGroup);
 
   function onRoll(): void {
     if (busy || game.gameOver || game.remainingDice.length > 0 || !game.isHuman(game.playerIndex)) return;
@@ -698,6 +774,7 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     },
     dispose() {
       options.ticker.remove(tick);
+      detachKeyGroup(gameGroup);
       tutorial.hide();
       root.destroy({ children: true });
     },

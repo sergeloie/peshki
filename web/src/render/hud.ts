@@ -30,6 +30,25 @@ export interface GameLayout {
   board: { x: number; y: number; size: number };
 }
 
+/** §7 safe-area insets (env values read once at boot; margins never drop below 8 px). */
+export interface SafeArea {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+let safeArea: SafeArea = { top: 0, right: 0, bottom: 0, left: 0 };
+
+export function configureSafeArea(next: SafeArea): void {
+  safeArea = { ...next };
+}
+
+/** Read-only access for surfaces that mirror the portrait tray geometry. */
+export function getSafeArea(): SafeArea {
+  return safeArea;
+}
+
 const TV_PAD = 1.5;
 const DICE_PULSE_MS = 1600;
 /** Resting faces for the tray before the first roll (§6 has no pre-roll state). */
@@ -74,19 +93,26 @@ export function computeGameLayout(width: number, height: number): GameLayout {
   const short = Math.min(width, height);
   // §9: 16 phone, 17 tablet, 18 desktop, 20 TV minimum
   const baseFont = isTv ? 20 : short >= 900 ? 18 : short >= 600 ? 17 : 16;
+  // §7: env insets + margins never below 8 px; TV survives overscan with 24 px
+  const edge = (inset: number): number => Math.max(inset, Math.round(8 * pad));
+  const safeTop = edge(safeArea.top);
+  const safeRight = edge(safeArea.right);
+  const safeBottom = edge(safeArea.bottom);
+  const safeLeft = edge(safeArea.left);
 
-  if (width >= height) {
+  // §7: four aspect classes — square windows share the portrait arrangement
+  if (width > height * 1.2) {
     // §7.3.1: fixed side panel, square board left; board never stretches
+    const margin = Math.round(12 * pad);
     const panelWidth = Math.round(380 * pad);
-    const margin = 12 * pad;
-    const size = Math.min(height - 2 * margin, width - panelWidth - 3 * margin);
+    const size = Math.min(height - safeTop - safeBottom, width - panelWidth - safeLeft - safeRight - 2 * margin);
     return {
       orientation: 'landscape',
       isTv,
       baseFont,
       board: {
-        x: Math.max(margin / 2, (width - panelWidth - size) / 2),
-        y: (height - size) / 2,
+        x: Math.max(safeLeft, (width - safeRight - panelWidth - size) / 2),
+        y: (height + safeTop - safeBottom - size) / 2,
         size,
       },
     };
@@ -95,14 +121,17 @@ export function computeGameLayout(width: number, height: number): GameLayout {
   // §7.3: player chips on top (72 px: breathing room), dice tray at the bottom
   const topBar = Math.round(72 * pad);
   const tray = Math.round(224 * pad);
-  const margin = 8 * pad;
-  const size = Math.min(width - 2 * margin, height - topBar - tray - 2 * margin);
+  const size = Math.min(width - safeLeft - safeRight, height - safeTop - topBar - tray - safeBottom);
   // the board centres in whatever height is left over — no dead wood strip
   return {
     orientation: 'portrait',
     isTv,
     baseFont,
-    board: { x: (width - size) / 2, y: topBar + Math.max(0, (height - topBar - tray - size) / 2), size },
+    board: {
+      x: (width - size) / 2,
+      y: safeTop + topBar + Math.max(0, (height - safeTop - topBar - tray - safeBottom - size) / 2),
+      size,
+    },
   };
 }
 
@@ -493,14 +522,16 @@ function strokeArc(
       if (orientation === 'portrait') {
         const topBar = Math.round(72 * pad);
         const trayHeight = Math.round(224 * pad);
-        const trayTop = height - trayHeight;
+        const top = Math.max(Math.round(8 * pad), safeArea.top); // §7 safe-area env
+        const bottom = Math.max(Math.round(8 * pad), safeArea.bottom);
+        const trayTop = height - bottom - trayHeight;
 
-        topPanel.rect(0, 0, width, topBar).fill({ color: COLORS.panel, alpha: 0.92 });
+        topPanel.rect(0, top, width, topBar).fill({ color: COLORS.panel, alpha: 0.92 });
         topPanel
-          .moveTo(0, topBar - 1)
-          .lineTo(width, topBar - 1)
+          .moveTo(0, top + topBar - 1)
+          .lineTo(width, top + topBar - 1)
           .stroke({ width: 1, color: COLORS.brass, alpha: 0.3 });
-        trayPanel.rect(0, trayTop, width, trayHeight).fill({ color: COLORS.panel, alpha: 0.92 });
+        trayPanel.rect(0, trayTop, width, height - trayTop).fill({ color: COLORS.panel, alpha: 0.92 });
         trayPanel
           .moveTo(0, trayTop)
           .lineTo(width, trayTop)
@@ -518,7 +549,7 @@ function strokeArc(
 
         sumChip.position.set(width / 2, diceY + diceSize + 30 * pad);
         message.position.set(width / 2, diceY + diceSize + 30 * pad);
-        rollButton.position.set(width / 2, height - 12 * pad - 26 * pad);
+        rollButton.position.set(width / 2, height - bottom - 12 * pad - 26 * pad);
       }
       if (orientation === 'landscape') {
         const panelWidth = Math.round(380 * pad);
@@ -526,16 +557,16 @@ function strokeArc(
         sidePanel.rect(panelX, 0, panelWidth, height).fill({ color: COLORS.panel, alpha: 0.92 });
         sidePanel.moveTo(panelX, 0).lineTo(panelX, height).stroke({ width: 1, color: COLORS.brass, alpha: 0.3 });
         // pause in the panel's top-left corner (art §7.3.1 corner icon)
-        pauseButton.position.set(panelX + 24 * pad + 2, 24 * pad + 2);
+        pauseButton.position.set(panelX + 24 * pad + 2, Math.max(24 * pad + 2, safeArea.top + 4));
 
         // top block: dice pair → sum chip → roll → message
         const diceX = panelX + (panelWidth - diceSize) / 2;
         dice = [0, 1].map((index) => ({
           x: diceX,
-          y: 20 * pad + index * (diceSize + diceGap),
+          y: Math.max(20 * pad, safeArea.top) + index * (diceSize + diceGap),
           size: diceSize,
         }));
-        sumChip.position.set(panelX + panelWidth / 2, dice[dice.length - 1].y + diceSize + 26 * pad);
+        sumChip.position.set(panelX + panelWidth / 2, dice[dice.length - 1]!.y + diceSize + 26 * pad);
         // reading order (round 3): dice → state line → action
         message.position.set(panelX + panelWidth / 2, sumChip.y + 44 * pad);
         rollButton.position.set(panelX + panelWidth / 2, message.y + 50 * pad);
@@ -545,7 +576,7 @@ function strokeArc(
         chips.forEach((chip, index) => {
           chip.pos = {
             x: panelX + 14 * pad + chipWidth() / 2,
-            y: height - 24 * pad - rowHeight / 2 - (chips.length - 1 - index) * (rowHeight + 10 * pad),
+            y: height - Math.max(24 * pad, safeArea.bottom) - rowHeight / 2 - (chips.length - 1 - index) * (rowHeight + 10 * pad),
           };
         });
       }
@@ -553,10 +584,11 @@ function strokeArc(
       if (orientation === 'portrait') {
         const cw = chipWidth();
         const totalRow = cw * 4 + 3 * 10 * pad;
+        const chipTop = Math.max(Math.round(8 * pad), safeArea.top);
         chips.forEach((chip, index) => {
           chip.pos = {
             x: (width - totalRow) / 2 + cw / 2 + index * (cw + 10 * pad),
-            y: Math.round(36 * pad), // centred in the 72 * pad top bar
+            y: chipTop + Math.round(36 * pad), // centred in the 72 * pad top bar
           };
         });
       }

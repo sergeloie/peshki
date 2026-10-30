@@ -10,6 +10,8 @@ export interface BoardView {
   pointOf(cellIndex: number): Point | null;
   /** §7.3 move hint: dotted brass line from the selected pawn to each legal target. */
   highlight(cellIndices: number[], origin?: Point | null): void;
+  /** TV/keyboard focus ring over a legal target cell (board is reachable without a pointer). */
+  focusCell(cellIndex: number | null): void;
   /** §4: corner symbols stay engraved until the player's first pawn is placed. */
   setCornerOccupied(playerIndex: number, occupied: boolean): void;
   /** Debug harness (art review #6): show only the named material layers. */
@@ -44,7 +46,9 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
   const medallion = new Sprite({ texture: textures.medallion });
   const marks = new Graphics();
   const highlights = new Graphics();
-  root.addChild(shadows, frameG, trackG, cellsG, tailsG, benchesG, medallion, marks, highlights);
+  // keyboard focus ring is not part of the debug layer ledger: an input state, not material
+  const focusG = new Graphics();
+  root.addChild(shadows, frameG, trackG, cellsG, tailsG, benchesG, medallion, marks, highlights, focusG);
 
   const layerOf: Record<(typeof BOARD_LAYERS)[number], Container> = {
     shadows,
@@ -270,6 +274,19 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
     layout,
     pointOf(cellIndex) {
       return points.get(cellIndex) ?? null;
+    },
+    focusCell(cellIndex) {
+      focusG.clear();
+      if (cellIndex === null) return;
+      const point = points.get(cellIndex);
+      if (point === undefined) return;
+      const { scale: k, cellSize } = geometry;
+      focusG
+        .circle(point.x, point.y, cellSize * 0.52)
+        .stroke({ width: 4 * k, color: COLORS.brassLight, alpha: 0.95 });
+      focusG
+        .circle(point.x, point.y, cellSize * 0.52 - 7 * k)
+        .stroke({ width: 1.5 * k, color: COLORS.brass, alpha: 0.9 });
     },
     setCornerOccupied(playerIndex, occupied) {
       if (occupiedCorners[playerIndex] === occupied) return;
