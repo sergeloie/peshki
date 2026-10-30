@@ -2,6 +2,8 @@ import { Container, Rectangle } from 'pixi.js';
 import type { FederatedPointerEvent, Ticker } from 'pixi.js';
 import { Game, createBot, seededRandom } from '../engine';
 import type { Difficulty, Move, PawnRef } from '../engine';
+import { fromSave } from '../engine/save';
+import type { SavedGame } from '../engine/save';
 import { HANDOVER_MS, decisionDelay } from '../game/pacing';
 import type { HintId } from '../game/progress';
 import { createBoardGeometry } from '../render/board-geometry';
@@ -41,6 +43,10 @@ export interface GameScreenOptions {
   ticker: Ticker;
   /** Fixed seed keeps screenshots reproducible. */
   seed?: number;
+  /** Restored session from the autosave envelope; absent starts a fresh game. */
+  saved?: SavedGame;
+  /** Fires once per completed turn, after the seat and dice ledger have settled. */
+  onTurnEnd?(game: Game): void;
   /** Debug harness (art review #6): show only these board/table layers. */
   visibleLayers?: ReadonlySet<string>;
   /** Debug harness: expose world-bounds probe for the audit test. */
@@ -57,7 +63,11 @@ export interface GameScreenOptions {
 
 export function createGameScreen(options: GameScreenOptions): GameScreen {
   const gameSeed = options.seed ?? Date.now();
-  const game = new Game({ random: seededRandom(gameSeed >>> 0) });
+  const game = options.saved === undefined
+    ? new Game({ random: seededRandom(gameSeed >>> 0) })
+    : fromSave(options.saved);
+  // A restored session is already saved; only a completed turn earns a rewrite.
+  let lastTurn = game.turnNumber;
   const botRandom = seededRandom((gameSeed ^ 0x9e3779b9) >>> 0);
   const bot = createBot(game.board, options.difficulty, { random: botRandom });
   let gameLayout: GameLayout = computeGameLayout(1, 1);
@@ -344,6 +354,10 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     } else {
       setSelection(null, game.isHuman(game.playerIndex) ? game.legalMoves() : []);
       syncHumanDisabled();
+      if (game.turnNumber !== lastTurn) {
+        lastTurn = game.turnNumber;
+        options.onTurnEnd?.(game);
+      }
     }
     refreshHud();
     refreshCorners();
