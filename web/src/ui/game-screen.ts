@@ -1,13 +1,16 @@
-import { Container, Graphics, Rectangle } from 'pixi.js';
-import type { FederatedPointerEvent } from 'pixi.js';
+import { Container, Rectangle } from 'pixi.js';
+import type { FederatedPointerEvent, Ticker } from 'pixi.js';
 import { Game, createBot, seededRandom } from '../engine';
 import type { Difficulty, Move, PawnRef } from '../engine';
 import { HANDOVER_MS, decisionDelay } from '../game/pacing';
 import { createBoardGeometry } from '../render/board-geometry';
 import { createBoardView } from '../render/board-view';
 import { createPawnViews } from '../render/pawns';
-import { HUD_HEIGHT, createHud } from '../render/hud';
-import { COLORS } from '../render/palette';
+import { createHud, computeGameLayout } from '../render/hud';
+import type { GameLayout } from '../render/hud';
+import { sharedTextures } from '../render/table-surface';
+import { PLAYERS } from '../render/palette';
+import { STRINGS, format, seatLabel } from './strings';
 
 export interface GameScreen {
   root: Container;
@@ -17,25 +20,47 @@ export interface GameScreen {
 export interface GameScreenOptions {
   /** Bot level chosen by progression before this game started. */
   difficulty: Difficulty;
+  /** Drives the newborn pulse and the dice pulse. */
+  ticker: Ticker;
+  /** Fixed seed keeps screenshots reproducible. */
+  seed?: number;
+  /** Debug harness (art review #6): show only these board/table layers. */
+  visibleLayers?: ReadonlySet<string>;
+  /** Debug harness: expose world-bounds probe for the audit test. */
+  debug?: boolean;
   onGameOver?(): void;
 }
 
-const BOT_NAMES = ['Оскар', 'Нина', 'Гектор'];
-
 export function createGameScreen(options: GameScreenOptions): GameScreen {
-  const game = new Game({ random: seededRandom(Date.now() >>> 0) });
-  const botRandom = seededRandom((Date.now() ^ 0x9e3779b9) >>> 0);
+  const gameSeed = options.seed ?? Date.now();
+  const game = new Game({ random: seededRandom(gameSeed >>> 0) });
+  const botRandom = seededRandom((gameSeed ^ 0x9e3779b9) >>> 0);
   const bot = createBot(game.board, options.difficulty, { random: botRandom });
+  let gameLayout: GameLayout = computeGameLayout(1, 1);
   let geometry = createBoardGeometry(1, 1);
   let finished = false;
 
-  const boardView = createBoardView(geometry);
-  const pawnViews = createPawnViews(game.board, geometry, boardView.pointOf);
-  const hud = createHud({ onRoll, onSum });
-  const selection = new Graphics();
+  const textures = sharedTextures();
+  const boardView = createBoardView(geometry, textures);
+  const pawnViews = createPawnViews(game.board, geometry, textures, boardView.pointOf);
+  const hud = createHud(textures, { onRoll, onSum });
+  if (options.visibleLayers !== undefined) {
+    boardView.setLayerVisible(options.visibleLayers);
+    pawnViews.root.visible = options.visibleLayers.has('pawns');
+    hud.root.visible = options.visibleLayers.has('hud');
+  }
+
+  const boardLayer = new Container();
+  boardLayer.addChild(boardView.root, pawnViews.root);
+
   const root = new Container();
-  root.addChild(boardView.root, selection, pawnViews.root, hud.root);
+  root.addChild(boardLayer, hud.root);
   root.eventMode = 'static';
+
+  options.ticker.add(() => {
+    pawnViews.tick(options.ticker.deltaMS);
+    hud.tick(options.ticker.deltaMS);
+  });
 
   let selected: PawnRef | null = null;
   let pending: Move[] = [];
@@ -49,10 +74,7 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
 
     const pawn = pawnAt(point.x, point.y);
     if (pawn !== null) {
-      selected = pawn;
-      pending = game.legalMoves().filter((move) => move.pawnIndex === pawn.pawnIndex);
-      boardView.highlight(pending.map((move) => move.targetCellIndex));
-      drawSelection();
+      setSelection(pawn, game.legalMoves().filter((move) => move.pawnIndex === pawn.pawnIndex));
       return;
     }
 
@@ -61,9 +83,31 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     const candidates = pending.filter((move) => move.targetCellIndex === cell);
     if (candidates.length === 0) return;
     const move =
-      selected === null ? candidates[0] : candidates.find((candidate) => candidate.pawnIndex === selected?.pawnIndex) ?? candidates[0];
+      selected === null
+        ? candidates[0]
+        : (candidates.find((candidate) => candidate.pawnIndex === selected?.pawnIndex) ?? candidates[0]);
     void play(move);
   });
+
+  /** §5/§7.3: selected pawn lifts, brass hint ring, dotted line to every target. */
+  function setSelection(ref: PawnRef | null, moves: Move[]): void {
+    selected = ref;
+    pending = moves;
+    pawnViews.setSelected(selected);
+    if (selected === null) {
+      boardView.highlight(
+        game.isHuman(game.playerIndex) && !busy ? pendingTargets() : [],
+        null,
+      );
+      return;
+    }
+    const sprite = pawnViews.sprite(selected.playerIndex, selected.pawnIndex);
+    boardView.highlight(pending.map((move) => move.targetCellIndex), { x: sprite.x, y: sprite.y });
+  }
+
+  function pendingTargets(): number[] {
+    return pending.map((move) => move.targetCellIndex);
+  }
 
   function onRoll(): void {
     if (busy || game.gameOver || game.remainingDice.length > 0 || !game.isHuman(game.playerIndex)) return;
@@ -71,16 +115,13 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     const events = game.rollDice();
     if (events.some((event) => event.type === 'moveRejected')) return;
 
-    selected = null;
-    selection.clear();
+    // A roll that ends the turn had no legal move to play: say so before the hand-over.
     const ended = events.some((event) => event.type === 'turnEnded' || event.type === 'gameWon' || event.type === 'gameDrawn');
     if (!ended) {
-      pending = game.legalMoves();
-      boardView.highlight(pending.map((move) => move.targetCellIndex));
+      setSelection(null, game.legalMoves());
       refreshHud();
       return;
     }
-    // A roll that ends the turn had no legal move to play: say so before the hand-over.
     void handOverFromHuman(events.some((event) => event.type === 'turnEnded'));
   }
 
@@ -92,20 +133,14 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       void play(sumMoves[0]);
       return;
     }
-    selected = null;
-    selection.clear();
-    pending = sumMoves;
-    boardView.highlight(pending.map((move) => move.targetCellIndex));
+    setSelection(null, sumMoves);
     refreshHud();
   }
 
   async function play(move: Move): Promise<void> {
     if (busy || game.gameOver) return;
     busy = true;
-    selected = null;
-    pending = [];
-    selection.clear();
-    boardView.highlight([]);
+    setSelection(null, []);
     refreshHud();
 
     await performMove(move);
@@ -167,10 +202,14 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       const from = { x: victim.x, y: victim.y };
       await animate(300, (t) => {
         const eased = easeOut(t);
-        victim.position.set(from.x + (target.x - from.x) * eased, from.y + (target.y - from.y) * eased - Math.sin(Math.PI * t) * 40 * geometry.scale);
+        victim.position.set(
+          from.x + (target.x - from.x) * eased,
+          from.y + (target.y - from.y) * eased - Math.sin(Math.PI * t) * 40 * geometry.scale,
+        );
       });
     }
 
+    refreshCorners();
     pawnViews.sync();
   }
 
@@ -236,11 +275,11 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       refreshHud();
       await sleep(HANDOVER_MS);
       noMoves = false;
-    }
-    if (game.gameOver) {
-      busy = false;
-      settle();
-      return;
+      if (game.gameOver) {
+        busy = false;
+        settle();
+        return;
+      }
     }
     if (!game.isHuman(game.playerIndex)) {
       await botTurn();
@@ -251,15 +290,27 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
   }
 
   function settle(): void {
+    busy = false;
     if (game.gameOver) {
-      pending = [];
-      boardView.highlight([]);
+      setSelection(null, []);
       finishGame();
     } else {
-      pending = game.legalMoves();
-      boardView.highlight(pending.map((move) => move.targetCellIndex));
+      setSelection(null, game.isHuman(game.playerIndex) ? game.legalMoves() : []);
+      syncHumanDisabled();
     }
     refreshHud();
+    refreshCorners();
+  }
+
+  /** §5 disabled look: waiting human pawns without a legal move dim down. */
+  function syncHumanDisabled(): void {
+    if (!game.isHuman(game.playerIndex) || game.gameOver || pending.length === 0) {
+      pawnViews.setDisabled(0, []);
+      return;
+    }
+    const movable = new Set(pending.map((move) => move.pawnIndex));
+    const disabled = game.board.movablePawns(0).filter((pawnIndex) => !movable.has(pawnIndex));
+    pawnViews.setDisabled(0, disabled);
   }
 
   function finishGame(): void {
@@ -267,9 +318,17 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     finished = true;
     pending = [];
     selected = null;
-    selection.clear();
+    pawnViews.setSelected(null);
     boardView.highlight([]);
     options.onGameOver?.();
+  }
+
+  /** §4 corner plate symbols hide as soon as a pawn stands on the corner. */
+  function refreshCorners(): void {
+    for (let playerIndex = 0; playerIndex < PLAYERS.length; playerIndex += 1) {
+      const cornerCell = game.board.cornerCell(playerIndex);
+      boardView.setCornerOccupied(playerIndex, game.board.occupantAt(cornerCell) !== null);
+    }
   }
 
   function pawnAt(x: number, y: number): PawnRef | null {
@@ -284,61 +343,91 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
 
   function cellAt(x: number, y: number): number | null {
     let closest: { cellIndex: number; distance: number } | null = null;
+    // boardLayer holds the square board at its own offset inside the screen
+    const bx = x - boardLayer.x;
+    const by = y - boardLayer.y;
     for (const cell of [...geometry.ring, ...geometry.homes.flat()]) {
-      const distance = Math.hypot(cell.x - x, cell.y - y);
+      const distance = Math.hypot(cell.x - bx, cell.y - by);
       if (closest === null || distance < closest.distance) closest = { cellIndex: cell.cellIndex, distance };
     }
     if (closest === null || closest.distance > geometry.cellSize * 0.55) return null;
     return closest.cellIndex;
   }
 
-  function drawSelection(): void {
-    selection.clear();
-    if (selected === null) return;
-    const sprite = pawnViews.sprite(selected.playerIndex, selected.pawnIndex);
-    selection.circle(sprite.x, sprite.y, 32 * geometry.scale).stroke({ width: 3, color: COLORS.brassLight });
-  }
-
   function refreshHud(): void {
     const sumMoves = sumMovesFor(game);
+    const dice = game.rolledDice;
     hud.update({
-      dice: game.rolledDice,
+      dice,
       remaining: game.remainingDice,
       canRoll: !busy && !game.gameOver && game.isHuman(game.playerIndex) && game.remainingDice.length === 0,
       sumLabel:
-        sumMoves.length > 0 && game.rolledDice.length === 2
-          ? `${game.rolledDice[0] + game.rolledDice[1]} = ${game.rolledDice[0]} + ${game.rolledDice[1]}`
+        sumMoves.length > 0 && dice.length === 2
+          ? format(STRINGS.gameSumHint, { sum: dice[0] + dice[1], a: dice[0], b: dice[1] })
           : null,
-      turn: seatLabel(game.playerIndex),
       message: resultMessage(game) ?? stateMessage(),
+      players: PLAYERS.map((_, playerIndex) => ({
+        playerIndex,
+        name: seatLabel(playerIndex),
+        benchCount: game.board.benchPawns(playerIndex).length,
+        active: playerIndex === game.playerIndex && !game.gameOver,
+      })),
     });
   }
 
   function stateMessage(): string | null {
-    if (noMoves) return 'Нет доступных ходов';
-    if (thinking) return `${seatLabel(game.playerIndex)} думает…`;
-    if (game.isHuman(game.playerIndex)) return game.remainingDice.length > 0 ? 'Ваш ход' : 'Ваш ход — бросайте';
-    return `${seatLabel(game.playerIndex)}: ход`;
+    if (noMoves) return STRINGS.gameNoMoves;
+    if (thinking) return `${seatLabel(game.playerIndex)} ${STRINGS.gameBotThinking}`;
+    if (game.isHuman(game.playerIndex)) {
+      return game.remainingDice.length > 0 ? STRINGS.gameYourMove : STRINGS.gameYourMoveRoll;
+    }
+    return STRINGS.gameBotMove;
   }
 
   return {
     root,
     layout(width, height) {
-      geometry = createBoardGeometry(width, Math.max(1, height - HUD_HEIGHT));
+      gameLayout = computeGameLayout(width, height);
+      geometry = createBoardGeometry(gameLayout.board.size, gameLayout.board.size);
+      boardLayer.position.set(gameLayout.board.x, gameLayout.board.y);
       boardView.layout(geometry);
       pawnViews.layout(geometry);
-      hud.layout(width, height);
+      hud.layout(width, height, gameLayout);
       root.hitArea = new Rectangle(0, 0, width, height);
-      boardView.highlight(pending.map((move) => move.targetCellIndex));
-      drawSelection();
+      if (options.debug) {
+        // measured, not asserted: frame rects and pawn boxes in screen px
+        (window as unknown as Record<string, unknown>).__peshkiMeasure = () => {
+          const k = geometry.scale;
+          const pawnBoxes: Array<{ playerIndex: number; pawnIndex: number; x: number; y: number; w: number; h: number }> = [];
+          pawnViews.root.children.forEach((child, index) => {
+            const bounds = child.getLocalBounds();
+            pawnBoxes.push({
+              playerIndex: Math.floor(index / game.config.numberOfPawns),
+              pawnIndex: index % game.config.numberOfPawns,
+              x: boardLayer.x + child.x + bounds.minX * child.scale.x,
+              y: boardLayer.y + child.y + bounds.minY * child.scale.y,
+              w: (bounds.maxX - bounds.minX) * child.scale.x,
+              h: (bounds.maxY - bounds.minY) * child.scale.y,
+            });
+          });
+          return {
+            viewport: { width, height },
+            boardOuter: {
+              x: gameLayout.board.x + gameLayout.board.size / 2 - 640 * k,
+              y: gameLayout.board.y + gameLayout.board.size / 2 - 640 * k,
+              size: 1280 * k,
+            },
+            frameInnerHalf: 542 * k,
+            scale: k,
+            pawnBoxes,
+          };
+        };
+      }
+      setSelection(null, game.isHuman(game.playerIndex) ? game.legalMoves() : []);
+      refreshCorners();
       refreshHud();
     },
   };
-}
-
-function seatLabel(playerIndex: number): string {
-  if (playerIndex === 0) return 'Вы';
-  return BOT_NAMES[playerIndex - 1] ?? `Игрок ${playerIndex + 1}`;
 }
 
 function sumMovesFor(game: Game): Move[] {
@@ -349,8 +438,8 @@ function sumMovesFor(game: Game): Move[] {
 /** One plain line until ticket #7 builds the real victory screens. */
 function resultMessage(game: Game): string | null {
   if (!game.gameOver) return null;
-  if (game.result === 'draw') return `Ничья: лимит ${game.config.maxTurns} ходов`;
-  return `Победил игрок ${game.winnerPlayerIndex + 1}`;
+  if (game.result === 'draw') return format(STRINGS.resultDraw, { n: game.config.maxTurns });
+  return format(STRINGS.resultWinner, { n: game.winnerPlayerIndex + 1 });
 }
 
 function sleep(ms: number): Promise<void> {

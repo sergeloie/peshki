@@ -2,10 +2,13 @@ import type { Graphics } from 'pixi.js';
 
 export const COLORS = {
   table: 0x2e1710,
+  tableLight: 0x4a2517,
   frame: 0x503018,
   frameEdge: 0x7a4a2c,
+  frameDeep: 0x2a140d,
   boardInner: 0x6b3a20,
   boardInnerDeep: 0x4a2a16,
+  track: 0x40200f,
   cell: 0x8a5a34,
   cellLight: 0xbf8b52,
   cellDeep: 0x4a2a16,
