@@ -62,6 +62,11 @@ async function main() {
   // The menu is on screen and accepts pointer input, so the game is playable.
   createFlow(platform).menuInteractive();
 
+  // ?audit=1 — screenshot harness hooks; not part of the shipping surface
+  if (typeof URLSearchParams !== 'undefined' && new URLSearchParams(window.location.search).has('audit')) {
+    (window as unknown as Record<string, unknown>).__peshki = { app };
+  }
+
   if (typeof URLSearchParams !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
     if (params.get('screen') === 'game') {

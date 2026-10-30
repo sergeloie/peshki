@@ -7,12 +7,14 @@
     "dev": "vite",
     "test": "vitest run",
     "build": "tsc --noEmit && vite build",
+    "screens": "playwright test tests/screens.spec.ts",
     "package": "node scripts/package.mjs"
   },
   "dependencies": {
     "pixi.js": "8.22.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/node": "^22.19.1",
     "@types/ysdk": "1.2.0",
     "typescript": "5.9.3",

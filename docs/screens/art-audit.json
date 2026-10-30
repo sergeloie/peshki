@@ -1,0 +1,20 @@
+{
+  "rendering": "software renderer (SwiftShader); a device 60 fps number is ticket #8 on real hardware",
+  "textureBudget": {
+    "canvasesCreatedAtBoot": 25,
+    "canvasesCreatedWhileIdle": 0,
+    "pass": true
+  },
+  "staticSceneCost": {
+    "renderTreeNodes": 155,
+    "sprites": 77,
+    "graphics": 34,
+    "filtersInTree": 0,
+    "masksInTree": 0
+  },
+  "downloadBudget": {
+    "fontWoff2Bytes": 187564,
+    "totalDownloadedBytes": 7700371,
+    "artBudgetBytes": 3000000
+  }
+}

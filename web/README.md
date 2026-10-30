@@ -9,8 +9,15 @@ npm install
 npm run dev      # plain Vite dev server, no SDK
 npm run test
 npm run build    # type-check + dist/ with index.html at its root
+npm run screens  # Playwright: 3 viewport screenshots + art audit into ../docs/screens (slow, see below)
 npm run package  # zip dist/ into peshki.zip (reproducible, ASCII paths)
 ```
+
+`npm run screens` boots its own Vite server, shoots the game at 390×844, 1280×720 and
+1920×1080 with headless Chromium under SwiftShader — WebGL2 in software. Expect a few
+minutes for three shots; frame times from this setup are **not** device numbers (ticket
+#8 owns the real 60 fps measurement). A run that leaves a server on port 5173 is a
+failed run: the config always owns the server lifecycle (`reuseExistingServer: false`).
 
 ## Local development with the real SDK
 
