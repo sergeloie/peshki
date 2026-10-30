@@ -20,6 +20,7 @@ describe('difficulty progression', () => {
       hintsSeen: ['goal'],
       sound: false,
       language: 'en',
+      match: null,
     });
     expect(parseProgress('{"difficulty":"impossible","gamesPlayed":-1}')).toEqual(DEFAULT_PROGRESS);
     expect(parseProgress('not json')).toEqual(DEFAULT_PROGRESS);

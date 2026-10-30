@@ -143,7 +143,11 @@ export function cellCoordinates(config: GameConfig): Array<[number, number]> {
 }
 
 function parseSaved(json: string): SavedGame {
-  const value: unknown = JSON.parse(json);
+  return parseSavedGame(JSON.parse(json));
+}
+
+/** Validates an already-parsed value as a playable save; used for the web envelope too. */
+export function parseSavedGame(value: unknown): SavedGame {
   if (typeof value !== 'object' || value === null) throw new Error('save is not an object');
   const saved = value as SavedGame;
   const { config, players } = saved;

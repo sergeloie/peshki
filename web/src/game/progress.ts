@@ -1,7 +1,19 @@
 import type { Difficulty } from '../engine';
 import { DIFFICULTIES } from '../engine';
+import { parseSavedGame } from '../engine/save';
+import type { SavedGame } from '../engine/save';
 import type { Platform } from '../platform/ysdk';
 import type { Language } from '../i18n';
+
+/** Stored match payload version; bump whenever MatchEnvelope changes shape. */
+export const MATCH_VERSION = 1;
+
+/** A live match wrapped for storage; an unreadable or stale one is dropped on load. */
+export interface MatchEnvelope {
+  version: number;
+  savedAt: number;
+  snapshot: SavedGame;
+}
 
 export interface GameProgress {
   difficulty: Difficulty;
@@ -11,6 +23,8 @@ export interface GameProgress {
   sound: boolean;
   /** Player's manual language; null follows the platform. */
   language: Language | null;
+  /** Unfinished match for the resume entry point; null when there is none. */
+  match: MatchEnvelope | null;
 }
 
 /** The first two completed games always run on novice (ticket #5). */
@@ -27,6 +41,7 @@ export const DEFAULT_PROGRESS: GameProgress = {
   hintsSeen: [],
   sound: true,
   language: null,
+  match: null,
 };
 
 export function parseProgress(text: string | null): GameProgress {
@@ -39,6 +54,7 @@ export function parseProgress(text: string | null): GameProgress {
       hintsSeen: Array.isArray(value.hintsSeen) ? [...new Set(value.hintsSeen.filter(isHintId))] : [],
       sound: typeof value.sound === 'boolean' ? value.sound : true,
       language: value.language === 'ru' || value.language === 'en' ? value.language : null,
+      match: parseMatch(value.match),
     };
   } catch {
     return { ...DEFAULT_PROGRESS };
@@ -76,6 +92,30 @@ export async function recordCompletedGame(
 /** Saves any blob change (settings, hints); save-on-change, no debounce. */
 export async function persistProgress(platform: Pick<Platform, 'saveProgress'>, progress: GameProgress): Promise<void> {
   await platform.saveProgress(JSON.stringify(progress));
+}
+
+/** Wraps a live snapshot in the versioned envelope for the progress blob. */
+export function withMatch(progress: GameProgress, snapshot: SavedGame, savedAt: number): GameProgress {
+  return { ...progress, match: { version: MATCH_VERSION, savedAt, snapshot } };
+}
+
+/** Drops the stored match so the next boot does not offer a corpse. */
+export function withoutMatch(progress: GameProgress): GameProgress {
+  return progress.match === null ? progress : { ...progress, match: null };
+}
+
+/** Unknown versions, finished games and corrupt snapshots all read as "no match". */
+function parseMatch(value: unknown): MatchEnvelope | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const envelope = value as Partial<MatchEnvelope>;
+  if (envelope.version !== MATCH_VERSION) return null;
+  if (typeof envelope.savedAt !== 'number') return null;
+  try {
+    const snapshot = parseSavedGame(envelope.snapshot);
+    return snapshot.gameOver ? null : { version: MATCH_VERSION, savedAt: envelope.savedAt, snapshot };
+  } catch {
+    return null;
+  }
 }
 
 function isDifficulty(value: unknown): value is Difficulty {

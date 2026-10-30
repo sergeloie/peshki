@@ -21,5 +21,5 @@ export { firstLegalMove } from './selectors';
 export type { MoveSelector } from './selectors';
 export { createBot, DIFFICULTIES, DIFFICULTY_INFO } from './bot';
 export type { BotOptions, Difficulty } from './bot';
-export { snapshot, toJson, fromJson, fromSave, cellCoordinates } from './save';
+export { snapshot, toJson, fromJson, fromSave, parseSavedGame, cellCoordinates } from './save';
 export type { SavedGame, SavedPlayer, SavedPawn, SavedCell } from './save';
