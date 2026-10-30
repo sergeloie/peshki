@@ -1,6 +1,7 @@
 import { Container, Graphics, Rectangle, Text } from 'pixi.js';
 import { COLORS } from '../render/palette';
 import { FONTS } from '../render/fonts';
+import { audio } from '../render/audio';
 
 export type ButtonKind = 'primary' | 'secondary';
 
@@ -77,7 +78,10 @@ export function createButton(
   root.on('pointerup', release);
   root.on('pointerupoutside', release);
   root.on('pointerleave', release);
-  root.on('pointertap', () => onTap?.());
+  root.on('pointertap', () => {
+    audio.play('button');
+    onTap?.();
+  });
 
   draw();
 
@@ -103,6 +107,7 @@ export function createButton(
       return focused;
     },
     activate() {
+      audio.play('button');
       root.scale.set(0.96);
       setTimeout(() => root.scale.set(1), 90);
       onTap?.();

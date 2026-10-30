@@ -12,6 +12,7 @@ import { createPawnViews } from '../render/pawns';
 import { createHud, computeGameLayout } from '../render/hud';
 import type { GameLayout } from '../render/hud';
 import { createEffectsLayer } from '../render/effects';
+import { audio } from '../render/audio';
 import { sharedTextures } from '../render/table-surface';
 import { PLAYERS } from '../render/palette';
 import type { Point } from '../render/board-geometry';
@@ -191,7 +192,10 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
 
     // §8: the dice plate choreography runs from the real diceRolled event values
     const rolled = events.find((event) => event.type === 'diceRolled');
-    if (rolled !== undefined && rolled.type === 'diceRolled') hud.toss(rolled.values);
+    if (rolled !== undefined && rolled.type === 'diceRolled') {
+      hud.toss(rolled.values);
+      audio.play('dice');
+    }
 
     // A roll that ends the turn had no legal move to play: say so before the hand-over.
     const ended = events.some((event) => event.type === 'turnEnded' || event.type === 'gameWon' || event.type === 'gameDrawn');
@@ -259,12 +263,15 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
         });
         // §8 placement: brass greeting ring on the corner as the pawn sets down
         effects.ringFlash(corner.x, corner.y, geometry.scale);
+        audio.play('place');
       }
     }
 
     for (const cellIndex of path ?? []) {
       const target = boardView.pointOf(cellIndex);
       if (target === null) continue;
+      // §10: one hollow knock per cell, not per animation
+      audio.play('step');
       const from = { x: sprite.x, y: sprite.y };
       await animate(170, (t) => {
         const eased = easeInOut(t);
@@ -282,6 +289,7 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       const target = pawnViews.benchPoint(event.victimPlayerIndex, event.victimPawnIndex);
       // §5 kill flash lives on the contact cell while the arc carries the victim away
       effects.ringFlash(victim.x, victim.y, geometry.scale);
+      audio.play('kill');
       await performKill(victim, target);
     }
     // §8 home entry: warm porcelain flash on the final cell
@@ -289,7 +297,10 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       const lastCell =
         move.kind === 'place' ? move.targetCellIndex : path === null ? null : path[path.length - 1];
       const cell = lastCell === null ? null : boardView.pointOf(lastCell);
-      if (cell !== null) effects.glowFlash(cell.x, cell.y, geometry.cellSize * 2.6);
+      if (cell !== null) {
+        effects.glowFlash(cell.x, cell.y, geometry.cellSize * 2.6);
+        audio.play('home');
+      }
     }
 
     refreshCorners();
@@ -349,6 +360,7 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
 
   /** §8 refused move: pawn shakes ±3 px and dulls, distinct from the happy selection. */
   async function refuse(sprite: Container): Promise<void> {
+    audio.play('deny');
     const home = { x: sprite.x, y: sprite.y };
     await animate(240, (t) => {
       const decay = (1 - t) ** 2;
@@ -479,12 +491,14 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       void winCascade(outcome).then(() => options.onGameOver?.(outcome));
       return;
     }
+    if (outcome.kind === 'lose') audio.play('lose');
     options.onGameOver?.(outcome);
   }
 
   /** §8 winning serenade: each homed pawn lights up in turn, the last lands with a flash. */
   async function winCascade(outcome: GameOutcome): Promise<void> {
     if (!effects.claimExpensive()) return;
+    audio.play('win');
     try {
       const winner = outcome.winnerSeat ?? 0;
       const spots: Point[] = [];

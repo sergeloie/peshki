@@ -3,6 +3,7 @@ import { COLORS, PLAYERS } from './palette';
 import { FONTS } from './fonts';
 import type { GameTextures } from './textures';
 import { t } from '../i18n';
+import { audio } from './audio';
 
 export interface PlayerChipState {
   playerIndex: number;
@@ -685,6 +686,8 @@ function strokeArc(
           toss = null;
           diceLayer.clear();
           if (lastState !== null) drawDice(lastState);
+          // §10: short porcelain click when the die lands
+          audio.play('settle');
         }
       } else if (remaining.length === 0) {
         return;

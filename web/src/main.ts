@@ -17,6 +17,7 @@ import type { Container } from 'pixi.js';
 import { createRenderer } from './render/app';
 import { createTableSurface } from './render/table-surface';
 import { loadFonts } from './render/fonts';
+import { audio } from './render/audio';
 import { pickLanguage, setLanguage, t } from './i18n';
 import { createGameScreen } from './ui/game-screen';
 import type { GameOutcome, GameScreen } from './ui/game-screen';
@@ -42,15 +43,19 @@ function asOutcomeKind(value: string | null): GameOutcome['kind'] | undefined {
 
 async function main() {
   const debug = new URLSearchParams(window.location.search);
+  const audioEngine = audio;
   const platform = createPlatform({
-    // shortcut: the audio bank lands in a later ticket; the switch stores the preference for it
-    setMuted: () => {},
+    // §10: window blur, visibility change and the Yandex pause all land here
+    setMuted: (muted) => audioEngine.setMuted(muted),
   });
   await platform.boot();
   let progress = await loadGameProgress(platform);
 
   // stored manual choice beats the SDK language; ru stays the fallback
   setLanguage(progress.language ?? pickLanguage(debug.get('lang') ?? platform.language()));
+
+  // sound preference from the settings blob; the system gate stays independent
+  audioEngine.setPreference(!progress.sound);
 
   // Pixi Text rasterises on first draw: bundle fonts must land before any canvas
   await loadFonts();
@@ -208,6 +213,7 @@ async function main() {
       {
         onToggleSound(soundOn) {
           progress = { ...progress, sound: soundOn };
+          audioEngine.setPreference(!soundOn);
           pushSave(progress);
         },
         onPickLanguage(language) {
