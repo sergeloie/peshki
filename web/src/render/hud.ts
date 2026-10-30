@@ -343,19 +343,30 @@ export function createHud(
       .stroke({ width: 3, color: COLORS.brassLight, alpha: 0.95 });
   }
 
-  /** §2 primary button: wood face, #BF8B52 sheen, #40200F drop. */
-  function drawPrimaryPlate(plate: Graphics, plateWidth: number, plateHeight: number): void {    plate.roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, plateHeight / 2).fill(COLORS.cell);
+  /** §2 primary button, plaque language since #8 (same family as createButton). */
+  function drawPrimaryPlate(plate: Graphics, plateWidth: number, plateHeight: number): void {
+    const radius = Math.min(10, plateHeight * 0.2);
+    plate.roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, radius).fill(COLORS.cell);
     plate
-      .moveTo(-plateWidth / 2 + plateHeight / 2, -plateHeight / 2 + 2.2)
-      .lineTo(plateWidth / 2 - plateHeight / 2, -plateHeight / 2 + 2.2)
-      .stroke({ width: 2, color: COLORS.cellLight, alpha: 0.6 });
+      .moveTo(-plateWidth / 2 + radius, -plateHeight / 2 + 2.2)
+      .lineTo(plateWidth / 2 - radius, -plateHeight / 2 + 2.2)
+      .stroke({ width: 2, color: COLORS.cellLight, alpha: 0.55 });
     plate
-      .moveTo(-plateWidth / 2 + plateHeight / 2, plateHeight / 2 - 3)
-      .lineTo(plateWidth / 2 - plateHeight / 2, plateHeight / 2 - 3)
-      .stroke({ width: 3, color: 0x40200f, alpha: 0.85 });
+      .moveTo(-plateWidth / 2 + radius, plateHeight / 2 - 3.2)
+      .lineTo(plateWidth / 2 - radius, plateHeight / 2 - 3.2)
+      .stroke({ width: 3, color: 0x120a05, alpha: 0.5 });
     plate
-      .roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, plateHeight / 2)
-      .stroke({ width: 1.5, color: COLORS.brass, alpha: 0.8 });
+      .roundRect(-plateWidth / 2 + 3, -plateHeight / 2 + 3, plateWidth - 6, plateHeight - 6, Math.max(0, radius - 2))
+      .stroke({ width: 1, color: 0x120a05, alpha: 0.6 });
+    plate
+      .roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, radius)
+      .stroke({ width: 1.6, color: COLORS.brass, alpha: 0.85 });
+    if (plateWidth > 220) {
+      for (const sign of [-1, 1]) {
+        plate.circle(sign * (plateWidth / 2 - 14), 0, 3).fill({ color: COLORS.brassLight, alpha: 0.85 });
+        plate.circle(sign * (plateWidth / 2 - 14) + 0.8, 1, 2.6).fill({ color: COLORS.brassDeep, alpha: 0.9 });
+      }
+    }
   }
 
   /** Dice face plates: idle tray, unspent/spent, or the §8 toss cycle on top. */

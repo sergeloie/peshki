@@ -45,24 +45,33 @@ export function createButton(
 
   function draw(): void {
     plate.clear();
-    if (kind === 'primary') {
-      plate.roundRect(-width / 2, -height / 2, width, height, height / 2).fill(COLORS.cell);
-      plate
-        .moveTo(-width / 2 + height / 2, -height / 2 + 2.2)
-        .lineTo(width / 2 - height / 2, -height / 2 + 2.2)
-        .stroke({ width: 2, color: COLORS.cellLight, alpha: 0.6 });
-      plate
-        .moveTo(-width / 2 + height / 2, height / 2 - 3)
-        .lineTo(width / 2 - height / 2, height / 2 - 3)
-        .stroke({ width: 3, color: 0x40200f, alpha: 0.85 });
-      plate
-        .roundRect(-width / 2, -height / 2, width, height, height / 2)
-        .stroke({ width: 1.5, color: COLORS.brass, alpha: 0.8 });
-    } else {
-      plate.roundRect(-width / 2, -height / 2, width, height, height / 2).fill(COLORS.panel);
-      plate
-        .roundRect(-width / 2, -height / 2, width, height, height / 2)
-        .stroke({ width: 1, color: COLORS.brass, alpha: 0.66 });
+    // #8 deferred cosmetics: buttons are engraved brass plaques, not web pills
+    const radius = Math.min(10, height * 0.2);
+    plate.roundRect(-width / 2, -height / 2, width, height, radius).fill(kind === 'primary' ? COLORS.cell : 0x241511);
+    // top sheen, below the key light
+    plate
+      .moveTo(-width / 2 + radius, -height / 2 + 2.4)
+      .lineTo(width / 2 - radius, -height / 2 + 2.4)
+      .stroke({ width: 2, color: kind === 'primary' ? COLORS.cellLight : COLORS.brassLight, alpha: kind === 'primary' ? 0.55 : 0.4 });
+    // bottom chamfer, carved darker
+    plate
+      .moveTo(-width / 2 + radius, height / 2 - 3.2)
+      .lineTo(width / 2 - radius, height / 2 - 3.2)
+      .stroke({ width: 3, color: 0x120a05, alpha: kind === 'primary' ? 0.5 : 0.75 });
+    // engraving pass inside the outer edge
+    plate
+      .roundRect(-width / 2 + 3, -height / 2 + 3, width - 6, height - 6, Math.max(0, radius - 2))
+      .stroke({ width: 1, color: 0x120a05, alpha: 0.6 });
+    // outer brass border
+    plate
+      .roundRect(-width / 2, -height / 2, width, height, radius)
+      .stroke({ width: 1.6, color: COLORS.brass, alpha: kind === 'primary' ? 0.8 : 0.95 });
+    // two rivets: the plaque is mounted, not floating (skip on narrow tiles)
+    if (width > 220) {
+      for (const sign of [-1, 1]) {
+        plate.circle(sign * (width / 2 - 14), 0, 3).fill({ color: COLORS.brassLight, alpha: 0.85 });
+        plate.circle(sign * (width / 2 - 14) + 0.8, 1, 2.6).fill({ color: COLORS.brassDeep, alpha: 0.9 });
+      }
     }
     ring.clear();
     if (focused) {

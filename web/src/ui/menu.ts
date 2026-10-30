@@ -1,4 +1,4 @@
-import { Container, Text } from 'pixi.js';
+import { Container, Sprite, Text } from 'pixi.js';
 import { FONTS } from '../render/fonts';
 import { t } from '../i18n';
 import type { StringKey } from '../i18n';
@@ -6,6 +6,7 @@ import { attachKeyGroup } from './keys';
 import type { KeyGroup } from './keys';
 import { createButton } from './widgets';
 import type { Button, ButtonKind } from './widgets';
+import { sharedTextures } from '../render/table-surface';
 
 export interface MenuOptions {
   onPlay?: () => void;
@@ -33,6 +34,12 @@ export function createMenu(options: MenuOptions): Menu {
   });
   heading.anchor.set(0.5);
 
+  // #8 deferred cosmetics: anchor for the empty bottom — the club crest engraved
+  // into the table below the buttons, half sunk past the lower edge
+  const crest = new Sprite({ texture: sharedTextures().medallion });
+  crest.anchor.set(0.5, 1);
+  crest.alpha = 0.14;
+
   interface Entry {
     button: Button;
     labelKey: StringKey;
@@ -56,6 +63,7 @@ export function createMenu(options: MenuOptions): Menu {
     root.addChild(button.root);
   }
   root.addChild(heading);
+  root.addChildAt(crest, 0); // the crest lies under everything
   attachKeyGroup(group);
 
   return {
@@ -72,6 +80,12 @@ export function createMenu(options: MenuOptions): Menu {
 
       heading.style.fontSize = Math.max(28, Math.min(shorter * 0.1, 84));
       heading.position.set(viewWidth / 2, viewHeight * 0.24);
+
+      // crest: large, quiet, half below the edge — the bottom ~40% is no longer dead
+      const crestSize = shorter * 0.8;
+      crest.width = crestSize;
+      crest.height = crestSize;
+      crest.position.set(viewWidth / 2, viewHeight + crestSize * 0.22);
 
       const buttonWidth = Math.min(340, shorter * 0.82);
       const fontSize = Math.round(Math.max(17, Math.min(shorter * 0.032, 21)));
