@@ -55,6 +55,6 @@ every SDK call becomes a no-op.
 | `game.ts` | The session: turn ownership, dice ledger, extra roll, win and draw. |
 | `win.ts`, `turn-policy.ts` | Win condition (§11) and the extra-roll rule (§10.3), one place each. |
 | `selectors.ts` | `MoveSelector`; `firstLegalMove` is the test-only default seat driver. |
-| `bot.ts` | Three bot levels (`novice`, `normal`, `hard`), the ported heuristic and the one-ply lookahead. |
+| `bot.ts` | Three bot levels (`novice`, `normal`, `hard`): the ported heuristic, seeded noise, and a whole-roll planner. |
 | `save.ts` | Snapshot, restore and the desktop-compatible JSON text. |
 | `test/engine/fuzz.test.ts` | Invariant fuzzer; `PESHKI_FUZZ_GAMES=100000` for the release run. |

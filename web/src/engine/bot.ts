@@ -3,6 +3,7 @@ import { applyMove } from './apply';
 import { generateMoves } from './moves';
 import type { Move, PlaceMove, StepMove } from './moves';
 import type { MoveSelector } from './selectors';
+import { hasWon } from './win';
 
 /** Scoring constants ported from core `BotStrategy`; higher is better. */
 const WIN = 1_000_000;
@@ -16,8 +17,8 @@ const PROGRESS = 400_000;
 /** Novice jitter stays below a winning move and can lift a plain step over a kill. */
 const NOVICE_NOISE = 750_000;
 
-/** ADR-0003: a six chains into another roll, so the opponent's reply on a six weighs double. */
-const SIX_WEIGHT = 2;
+/** How much the field's progress is worth against ours in the hard planner. */
+const RIVAL_WEIGHT = 0.5;
 
 export const DIFFICULTIES = ['novice', 'normal', 'hard'] as const;
 export type Difficulty = (typeof DIFFICULTIES)[number];
@@ -28,23 +29,26 @@ export const DIFFICULTY_INFO = {
   novice: { label: 'Новичок' },
   /** The plain heuristic: win > last field pawn kill > kill > home > enemy corner > own corner > progress. */
   normal: { label: 'Обычный' },
-  /** The heuristic plus a one-ply check of the opponent's best answer to every dice value. */
+  /** Plans the whole current roll by board value (our home/progress minus half of the field's), not one move ahead. */
   hard: { label: 'Сложный' },
 } as const satisfies Record<Difficulty, { label: string }>;
 
 export interface BotOptions {
   /** Seeded in tests; novice is the only level that consumes it. */
   random?: () => number;
+  /** Remaining dice for this decision; hard plans the whole roll with them. */
+  dice?: () => readonly number[];
 }
 
 export function createBot(board: Board, difficulty: Difficulty, options: BotOptions = {}): MoveSelector {
   const random = options.random ?? Math.random;
   return (legal) => {
+    const dice = difficulty === 'hard' ? (options.dice ? [...options.dice()] : inferDice(legal)) : [];
     let best: Move | null = null;
     let bestScore = -Infinity;
     for (const move of legal) {
       // Strict comparison keeps the first legal move on a tie, like the core stream max.
-      const score = scoreFor(board, move, difficulty, random);
+      const score = scoreFor(board, move, difficulty, random, dice);
       if (score > bestScore) {
         best = move;
         bestScore = score;
@@ -54,11 +58,18 @@ export function createBot(board: Board, difficulty: Difficulty, options: BotOpti
   };
 }
 
-function scoreFor(board: Board, move: Move, difficulty: Difficulty, random: () => number): number {
-  if (difficulty === 'hard') return scoreHard(board, move);
+function scoreFor(board: Board, move: Move, difficulty: Difficulty, random: () => number, dice: readonly number[]): number {
+  if (difficulty === 'hard') return planTurn(board, move, dice);
   const base = scoreMove(board, move);
   if (difficulty === 'normal' || base >= WIN) return base;
   return base + Math.floor(random() * NOVICE_NOISE);
+}
+
+/** The dice left in the roll when the caller has no ledger at hand (tests, single-die calls). */
+function inferDice(legal: readonly Move[]): number[] {
+  const pair = legal.find((move) => move.consumedDice.length === 2);
+  if (pair !== undefined) return [...pair.consumedDice];
+  return [...new Set(legal.flatMap((move) => move.consumedDice))];
 }
 
 function scoreMove(board: Board, move: Move): number {
@@ -113,32 +124,61 @@ function isEnemyLastFieldPawn(board: Board, enemyIndex: number): boolean {
 }
 
 /**
- * One-ply lookahead: score the move, then subtract the opponent's best answer,
- * averaged over one die. Sixes weigh double because a six chains (ADR-0003).
- * shortcut: the reply assumes the turn passes and the opponent rolls once; a deeper
- * search would handle the chained turn and the second die, upgrade when hard bots feel dull.
+ * Hard plays out the whole current roll: the first move is chosen by exhaustively
+ * trying each legal move, then the rest of the dice are spent greedily on the best
+ * resulting board. `RIVAL_WEIGHT` makes a kill worth its progress loss to the field.
+ * shortcut: only the current roll is planned; the opponent's reply and chained extra
+ * rolls are not simulated, upgrade when hard needs a real search.
  */
-function scoreHard(board: Board, move: Move): number {
-  const base = scoreMove(board, move);
-  if (base >= WIN) return base * 2;
-
+function planTurn(board: Board, move: Move, dice: readonly number[]): number {
   const next = board.clone();
-  const events = applyMove(next, move);
-  // A kill or a six keeps the turn (ADR-0003), so there is no opponent reply to weigh.
-  const keepsTurn = move.consumedDice.includes(6) || events.some((event) => event.type === 'pawnKilled');
-  if (keepsTurn) return base * 2;
+  applyMove(next, move);
+  return playOut(next, move.playerIndex, removeDice(dice, move.consumedDice));
+}
 
-  const opponent = (move.playerIndex + 1) % next.config.numberOfPlayers;
-  let total = 0;
-  let weight = 0;
-  for (let value = 1; value <= next.config.numberOfSidesOnDice; value += 1) {
-    const replyWeight = value === 6 ? SIX_WEIGHT : 1;
-    let bestReply = 0;
-    for (const reply of generateMoves(next, opponent, [value])) {
-      bestReply = Math.max(bestReply, scoreMove(next, reply));
+function playOut(board: Board, playerIndex: number, dice: readonly number[]): number {
+  // A plan that reaches the win beats any positional score.
+  if (hasWon(board, playerIndex)) return 1e15;
+  if (dice.length === 0) return evalBoard(board, playerIndex);
+
+  let best: Board | null = null;
+  let bestValue = -Infinity;
+  let bestDice: number[] = [];
+  for (const move of generateMoves(board, playerIndex, dice)) {
+    const next = board.clone();
+    applyMove(next, move);
+    const value = hasWon(next, playerIndex) ? 1e15 : evalBoard(next, playerIndex);
+    if (value > bestValue) {
+      best = next;
+      bestValue = value;
+      bestDice = removeDice(dice, move.consumedDice);
     }
-    total += replyWeight * bestReply;
-    weight += replyWeight;
   }
-  return base * 2 - total / weight;
+  if (best === null) return evalBoard(board, playerIndex);
+  return playOut(best, playerIndex, bestDice);
+}
+
+/** Our home count and progress, less a share of every rival's, so kills register. */
+function evalBoard(board: Board, playerIndex: number): number {
+  let value = board.countHome(playerIndex) * 1_000_000;
+  let rivals = 0;
+  for (let other = 0; other < board.config.numberOfPlayers; other += 1) {
+    const home = board.countHome(other);
+    let progress = 0;
+    for (let pawnIndex = 0; pawnIndex < board.config.numberOfPawns; pawnIndex += 1) {
+      progress += board.pawnProgress(other, pawnIndex);
+    }
+    if (other === playerIndex) value += progress;
+    else rivals += home * 1_000_000 + progress;
+  }
+  return value - RIVAL_WEIGHT * rivals;
+}
+
+function removeDice(pool: readonly number[], spent: readonly number[]): number[] {
+  const left = [...pool];
+  for (const value of spent) {
+    const index = left.indexOf(value);
+    if (index >= 0) left.splice(index, 1);
+  }
+  return left;
 }
