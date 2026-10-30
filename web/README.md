@@ -40,9 +40,11 @@ every SDK call becomes a no-op.
 | `src/platform/ysdk.ts` | The only module that touches `YaGames`. Exposes the `Platform` facade. |
 | `src/platform/lifecycle.ts` | Pause/mute on tab hidden or window blur. |
 | `src/game/flow.ts` | Screen flow; owns the single `LoadingAPI.ready()` signal. |
+| `src/game/progress.ts` | Difficulty progression: first two completed games on novice, then the stored choice. |
+| `src/game/pacing.ts` | Bot decision delay budget (0.4–0.7 s) and the hand-over pause. |
 | `src/render/app.ts` | Pixi application, resize, resolution cap, ticker pause. |
 | `src/ui/menu.ts` | Table surface, title, Play button. |
-| `src/ui/game-screen.ts` | Board, dice HUD, human taps, seats driven by `firstLegalMove`. |
+| `src/ui/game-screen.ts` | Board, dice HUD, human taps, paced bot seats. |
 | `test/` | vitest: engine boundaries, lifecycle, facade fallback. |
 
 `src/engine/` holds pure game logic and must not import `pixi.js`, `platform`, `render`, `ui` or
@@ -52,6 +54,7 @@ every SDK call becomes a no-op.
 |---|---|
 | `game.ts` | The session: turn ownership, dice ledger, extra roll, win and draw. |
 | `win.ts`, `turn-policy.ts` | Win condition (§11) and the extra-roll rule (§10.3), one place each. |
-| `selectors.ts` | `MoveSelector`; `firstLegalMove` is the placeholder seat driver of ticket #5. |
+| `selectors.ts` | `MoveSelector`; `firstLegalMove` is the test-only default seat driver. |
+| `bot.ts` | Three bot levels (`novice`, `normal`, `hard`), the ported heuristic and the one-ply lookahead. |
 | `save.ts` | Snapshot, restore and the desktop-compatible JSON text. |
 | `test/engine/fuzz.test.ts` | Invariant fuzzer; `PESHKI_FUZZ_GAMES=100000` for the release run. |
