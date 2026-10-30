@@ -4,7 +4,7 @@ export async function createRenderer(): Promise<Application> {
   const app = new Application();
 
   await app.init({
-    background: 0x1a0c07,
+    background: 0x2e1710, // §2 table base; the wood tile and vignette sit on top
     resizeTo: window,
     resolution: Math.min(window.devicePixelRatio, 2),
     autoDensity: true,
