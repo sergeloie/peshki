@@ -141,30 +141,52 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
       .stroke({ width: 1.6 * k, color: COLORS.cellLight, alpha: 0.32 });
   }
 
-  /** Porcelain wedges narrowing to the centre (§4 «лестница внутрь», no groove). */
+  /**
+   * §4 home tails: three separate porcelain steps per tail (104 → 96 → 88),
+   * narrowing toward the centre, each capped inside the corner tile's inner
+   * edge (design 414) and clear of the medallion (design 118) so the three
+   * cells read distinctly — no windmill, no arm crossing the ring.
+   */
   function drawHomes(): void {
     const { scale, center } = geometry;
+    const ringInner = 480 * scale;
+    const cellInner = ringInner - (RING_CELL_SIZE / 2 + 8) * scale; // design 414 scaled
+    const medallionEdge = (110 + 8) * scale; // design 118 scaled
     for (const homes of geometry.homes) {
       const look = PLAYERS[homes[0].playerIndex];
       for (const home of homes) {
         points.set(home.cellIndex, { x: home.x, y: home.y });
-        addShadow(home.x, home.y, home.size * 1.05, 0.2);
+        addShadow(home.x, home.y, home.size * 1.02, 0.18);
+        const d = Math.hypot(home.x - center.x, home.y - center.y);
         const u = normalize({ x: home.x - center.x, y: home.y - center.y });
         const perp = { x: -u.y, y: u.x };
         const s = home.size;
+        const radiusOuter = Math.min(d + s * 0.4, cellInner);
+        const radiusInner = Math.max(d - s * 0.4, medallionEdge);
+        const halfWidthOuter = s * 0.44; // tile runs ~88 % of the step size across
+        const halfWidthInner = s * 0.36;
+        const at = (radius: number, halfWidth: number, sign: number): Point => ({
+          x: center.x + u.x * radius + perp.x * halfWidth * sign,
+          y: center.y + u.y * radius + perp.y * halfWidth * sign,
+        });
         const poly: Point[] = [
-          { x: home.x + u.x * (s * 0.5) + perp.x * (s * 0.44), y: home.y + u.y * (s * 0.5) + perp.y * (s * 0.44) },
-          { x: home.x + u.x * (s * 0.5) - perp.x * (s * 0.44), y: home.y + u.y * (s * 0.5) - perp.y * (s * 0.44) },
-          { x: home.x - u.x * (s * 0.42) - perp.x * (s * 0.34), y: home.y - u.y * (s * 0.42) - perp.y * (s * 0.34) },
-          { x: home.x - u.x * (s * 0.42) + perp.x * (s * 0.34), y: home.y - u.y * (s * 0.42) + perp.y * (s * 0.34) },
+          at(radiusOuter, halfWidthOuter, 1),
+          at(radiusOuter, halfWidthOuter, -1),
+          at(radiusInner, halfWidthInner, -1),
+          at(radiusInner, halfWidthInner, 1),
         ];
         base.poly(poly).fill(COLORS.ivory);
-        base.poly(poly).stroke({ width: 1.6 * scale, color: look.color, alpha: 0.85 });
-        // soft shading on the centre-facing edge, §3 «no glare»
+        // brass rim in the player's colour (§4)
+        base.poly(poly).stroke({ width: 1.6 * scale, color: look.color, alpha: 0.9 });
+        // thickness on the outer edge away from the light, lit inner rim (§3)
+        base
+          .moveTo(poly[0].x, poly[0].y)
+          .lineTo(poly[1].x, poly[1].y)
+          .stroke({ width: 2.6 * scale, color: COLORS.ivoryDeep, alpha: 0.6 });
         base
           .moveTo(poly[2].x, poly[2].y)
           .lineTo(poly[3].x, poly[3].y)
-          .stroke({ width: 3.4 * scale, color: COLORS.ivoryDeep, alpha: 0.55 });
+          .stroke({ width: 1.4 * scale, color: COLORS.cellLight, alpha: 0.45 });
       }
     }
   }
@@ -177,20 +199,25 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
     medallion.position.set(center.x - diameter / 2, center.y - diameter / 2);
   }
 
-  /** §4 benches: four recessed holes with rim light at the bottom edge. */
+  /** §4 benches: four recessed holes with rim light; each arc re-seeded from moveTo. */
   function drawBenchSlots(): void {
     const { scale } = geometry;
     for (const benches of geometry.benches) {
       for (const slot of benches) {
         const r = 22 * scale;
         base.circle(slot.x, slot.y, r).fill(COLORS.engraved);
-        base
-          .arc(slot.x, slot.y - 1 * scale, r * 0.8, Math.PI * 0.12, Math.PI * 0.55)
-          .stroke({ width: 3 * scale, color: COLORS.cell, alpha: 0.75 });
-        base
-          .arc(slot.x, slot.y, r, Math.PI * 0.9, Math.PI * 1.5)
-          .stroke({ width: 2.4 * scale, color: COLORS.frameDeep, alpha: 0.85 });
-        base.circle(slot.x, slot.y, r).stroke({ width: 1 * scale, color: COLORS.boardInner, alpha: 0.7 });
+        // light rim where the key light reaches into the recess
+        strokeArc(base, slot.x, slot.y - 1 * scale, r * 0.8, Math.PI * 0.12, Math.PI * 0.55, {
+          width: 3 * scale,
+          color: COLORS.cell,
+          alpha: 0.75,
+        });
+        // deep rim top-left, away from the light
+        strokeArc(base, slot.x, slot.y, r * 0.95, Math.PI * 0.9, Math.PI * 1.5, {
+          width: 2.4 * scale,
+          color: COLORS.frameDeep,
+          alpha: 0.85,
+        });
       }
     }
   }
@@ -257,7 +284,7 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
   };
 }
 
-/** §7.3 dotted brass hint line. */
+/** Dot-dash brass hint line (§7.3 «пунктирная латунная линия»). */
 function drawDottedLine(graphics: Graphics, from: Point, to: Point, dash: number, scale: number): void {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -268,6 +295,24 @@ function drawDottedLine(graphics: Graphics, from: Point, to: Point, dash: number
   for (let d = length * 0.24; d < length - 8 * scale; d += dash) {
     graphics.circle(from.x + ux * d, from.y + uy * d, 2.6 * scale).fill({ color: COLORS.brassLight, alpha: 0.85 });
   }
+}
+
+/**
+ * Arc stroke that cannot leak a connecting chord: Pixi v8 joins the current
+ * path point to the next arc's start, so every arc is re-seeded with moveTo.
+ */
+function strokeArc(
+  graphics: Graphics,
+  x: number,
+  y: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number,
+  style: Parameters<Graphics['stroke']>[0],
+): void {
+  graphics.moveTo(x + Math.cos(startAngle) * radius, y + Math.sin(startAngle) * radius);
+  graphics.arc(x, y, radius, startAngle, endAngle);
+  graphics.stroke(style);
 }
 
 function strokePolygon(graphics: Graphics, points: Point[], width: number, color: number, alpha: number): void {

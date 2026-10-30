@@ -114,12 +114,28 @@ test.describe('art pass evidence', () => {
       const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
       const downloaded = (entry: { transferSize: number; encodedBodySize: number }): number =>
         entry.transferSize || entry.encodedBodySize || 0;
-      const fontBytes = entries
-        .filter((entry) => entry.name.endsWith('.woff2'))
-        .reduce((sum, entry) => sum + downloaded(entry), 0);
+      // art budget counts bundled art assets (fonts, images); board textures are procedural
+      const isArt = (url: string): boolean => /\.(woff2?|png|jpe?g|webp|gif|svg)(\?|$)/i.test(url);
+      const resources = entries.map((entry) => ({
+        resource: entry.name.split('/').slice(-1)[0],
+        bytes: downloaded(entry),
+        art: isArt(entry.name),
+      }));
+      const artBytes = resources.filter((r) => r.art).reduce((sum, r) => sum + r.bytes, 0);
       const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-      const totalBytes = entries.reduce((sum, entry) => sum + downloaded(entry), 0) + (navigation ? downloaded(navigation) : 0);
-      return { canvases: (window as unknown as { __peshkiAudit: { canvases: number } }).__peshkiAudit.canvases, filters, masks, nodes, sprites, graphics, fontBytes, totalBytes };
+      const totalBytes =
+        resources.reduce((sum, r) => sum + r.bytes, 0) + (navigation ? navigation.transferSize : 0);
+      return {
+        canvases: (window as unknown as { __peshkiAudit: { canvases: number } }).__peshkiAudit.canvases,
+        filters,
+        masks,
+        nodes,
+        sprites,
+        graphics,
+        artBytes,
+        totalBytes,
+        topResources: [...resources].sort((a, b) => b.bytes - a.bytes).slice(0, 6),
+      };
     });
 
     const stats = {
@@ -138,15 +154,24 @@ test.describe('art pass evidence', () => {
         masksInTree: audit.masks,
       },
       downloadBudget: {
-        fontWoff2Bytes: audit.fontBytes,
-        totalDownloadedBytes: audit.totalBytes,
+        // art = bundled fonts + images; textures are procedural (0 bytes)
+        artBytes: audit.artBytes,
         artBudgetBytes: 3_000_000,
+        artBudgetPass: audit.artBytes <= 3_000_000,
+        // the rest is dev-server module code, unminified — the shipped bundle is ~1.4 MB
+        totalRequestBytes: audit.totalBytes,
+        topResources: audit.topResources,
       },
     };
     writeFileSync(resolve(SHOT_DIR, 'art-audit.json'), JSON.stringify(stats, null, 2) + '\n');
     console.log('art audit:', JSON.stringify(stats));
     expect(stats.textureBudget.canvasesCreatedWhileIdle).toBe(0);
-    expect(stats.downloadBudget.fontWoff2Bytes).toBeLessThan(600_000);
+    // loud art-budget failure instead of a number nobody checks
+    expect(
+      stats.downloadBudget.artBytes,
+      `bundled art exceeds the 3 MB budget (${stats.downloadBudget.artBytes} bytes)`,
+    ).toBeLessThan(3_000_000);
+    expect(stats.downloadBudget.artBytes).toBeLessThan(600_000); // fonts alone should stay far under
     await dropBrowser();
   });
 });
