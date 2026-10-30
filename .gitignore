@@ -39,3 +39,8 @@ out/
 .hprof
 .aider*
 /.mimocode/
+
+# agent-local artifacts (see AGENTS.md: temporary docs, scratch, agent state)
+/plans/
+/.tmp/
+/.agents/
