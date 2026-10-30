@@ -39,14 +39,12 @@ export const DIFFICULTY_INFO = {
 export interface BotOptions {
   /** Seeded in tests; novice is the only level that consumes it. */
   random?: () => number;
-  /** Remaining dice for this decision; hard plans the whole roll with them. */
-  dice?: () => readonly number[];
 }
 
 export function createBot(board: Board, difficulty: Difficulty, options: BotOptions = {}): MoveSelector {
   const random = options.random ?? Math.random;
-  return (legal) => {
-    const dice = difficulty === 'hard' ? (options.dice ? [...options.dice()] : inferDice(legal)) : [];
+  return (legal, context) => {
+    const dice = difficulty === 'hard' ? [...context.dice] : [];
     let best: Move | null = null;
     let bestScore = -Infinity;
     for (const move of legal) {
@@ -66,13 +64,6 @@ function scoreFor(board: Board, move: Move, difficulty: Difficulty, random: () =
   const base = scoreMove(board, move);
   if (difficulty === 'normal' || base >= WIN) return base;
   return base + Math.floor(random() * NOVICE_NOISE);
-}
-
-/** The dice left in the roll when the caller has no ledger at hand (tests, single-die calls). */
-function inferDice(legal: readonly Move[]): number[] {
-  const pair = legal.find((move) => move.consumedDice.length === 2);
-  if (pair !== undefined) return [...pair.consumedDice];
-  return [...new Set(legal.flatMap((move) => move.consumedDice))];
 }
 
 function scoreMove(board: Board, move: Move): number {

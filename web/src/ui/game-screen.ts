@@ -25,7 +25,7 @@ const BOT_NAMES = ['Оскар', 'Нина', 'Гектор'];
 export function createGameScreen(options: GameScreenOptions): GameScreen {
   const game = new Game({ random: seededRandom(Date.now() >>> 0) });
   const botRandom = seededRandom((Date.now() ^ 0x9e3779b9) >>> 0);
-  const bot = createBot(game.board, options.difficulty, { random: botRandom, dice: () => game.remainingDice });
+  const bot = createBot(game.board, options.difficulty, { random: botRandom });
   let geometry = createBoardGeometry(1, 1);
   let finished = false;
 
@@ -216,7 +216,7 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       thinking = false;
       if (game.gameOver || game.playerIndex !== seat) break;
 
-      const move = bot(legal);
+      const move = bot(legal, { dice: [...game.remainingDice] });
       if (move === null) break;
       await performMove(move);
       refreshHud();

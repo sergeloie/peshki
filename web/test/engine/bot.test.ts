@@ -39,7 +39,7 @@ describe('bot scoring port (core BotStrategy)', () => {
     const board = new Board(DEFAULT_CONFIG);
     movePawns(board, SEVEN_SHORT);
     const legal = generateMoves(board, 0, [3, 4]);
-    const move = select(board, 'normal', legal);
+    const move = select(board, 'normal', legal, [3, 4]);
 
     expect(move.kind).toBe('step');
     expect(move.steps).toBe(7);
@@ -49,7 +49,7 @@ describe('bot scoring port (core BotStrategy)', () => {
   it('normal prefers a kill over entering home', () => {
     const board = killOrHomeBoard();
     const legal = generateMoves(board, 0, [2]);
-    const move = select(board, 'normal', legal);
+    const move = select(board, 'normal', legal, [2]);
 
     expect(move.pawnIndex).toBe(1);
     expect(board.occupantAt(move.targetCellIndex)?.playerIndex).toBe(1);
@@ -60,7 +60,7 @@ describe('bot scoring port (core BotStrategy)', () => {
     const legal = generateMoves(board, 0, [2]);
     const values = [0.99, 0];
     let index = 0;
-    const move = createBot(board, 'novice', { random: () => values[index++] ?? 0 })(legal);
+    const move = createBot(board, 'novice', { random: () => values[index++] ?? 0 })(legal, { dice: [2] });
 
     expect(move?.pawnIndex).toBe(0);
   });
@@ -74,7 +74,7 @@ describe('bot scoring port (core BotStrategy)', () => {
       { player: 0, pawn: 3, cell: 30 },
     ]);
     const legal = generateMoves(board, 0, [3, 4]);
-    const move = select(board, 'hard', legal);
+    const move = select(board, 'hard', legal, [3, 4]);
 
     expect(move.kind).toBe('step');
     expect(move.steps).toBe(3);
@@ -86,8 +86,8 @@ describe('bot scoring port (core BotStrategy)', () => {
   it('all three levels choose the same move for the same seed and position', () => {
     for (const difficulty of DIFFICULTIES) {
       const { board, legal } = fixedPosition();
-      const first = createBot(board, difficulty, { random: seededRandom(11) })(legal);
-      const second = createBot(board, difficulty, { random: seededRandom(11) })(legal);
+      const first = createBot(board, difficulty, { random: seededRandom(11) })(legal, { dice: [3, 4] });
+      const second = createBot(board, difficulty, { random: seededRandom(11) })(legal, { dice: [3, 4] });
       expect(first, difficulty).not.toBeNull();
       expect(moveKey(first as Move), difficulty).toBe(moveKey(second as Move));
     }
@@ -138,8 +138,8 @@ describe('bot batch', () => {
   });
 });
 
-function select(board: Board, difficulty: Difficulty, legal: readonly Move[]): Move {
-  const move = createBot(board, difficulty, { random: seededRandom(11) })(legal);
+function select(board: Board, difficulty: Difficulty, legal: readonly Move[], dice: readonly number[]): Move {
+  const move = createBot(board, difficulty, { random: seededRandom(11) })(legal, { dice });
   if (move === null) throw new Error('the bot returned no move');
   return move;
 }
@@ -163,10 +163,7 @@ function emptyRow(): Record<Difficulty, number> {
 function playAutoGame(seed: number, seat0: Difficulty, others: Difficulty): Game {
   const game = new Game({ humanPlayerIndex: -1, random: seededRandom(seed) });
   const selectors: MoveSelector[] = Array.from({ length: game.config.numberOfPlayers }, (_, index) =>
-    createBot(game.board, index === 0 ? seat0 : others, {
-      random: seededRandom(seed * 31 + index),
-      dice: () => game.remainingDice,
-    }),
+    createBot(game.board, index === 0 ? seat0 : others, { random: seededRandom(seed * 31 + index) }),
   );
 
   for (let turn = 0; !game.gameOver && turn < 100_000; turn += 1) {

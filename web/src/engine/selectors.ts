@@ -1,7 +1,7 @@
 import type { Move } from './moves';
 
 /** The single move-choice seam shared by the UI and the bots (ADR-0001). */
-export type MoveSelector = (legal: readonly Move[]) => Move | null;
+export type MoveSelector = (legal: readonly Move[], context: { dice: readonly number[] }) => Move | null;
 
 /**
  * First legal move only. Kept as the default seat driver for tests; the game
