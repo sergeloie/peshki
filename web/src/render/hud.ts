@@ -113,6 +113,10 @@ export interface HudView {
   setLive(value: boolean): void;
   /** §6 unspent-die pulse; drive from a ticker with delta ms. */
   tick(elapsedMs: number): void;
+  /** §8 dice choreography: toss 120 ms rise, 300 ms tumble, 140 ms settle — second die +60 ms. */
+  toss(values: number[]): void;
+  /** TV/keyboard focus ring on the roll button. */
+  setRollFocused(value: boolean): void;
 }
 
 interface ChipView {
@@ -207,6 +211,9 @@ export function createHud(
   const diceShadows = new Container();
   const diceLayer = new Graphics();
   const dicePulse = new Graphics();
+  // focused roll + player-hand-over rings tick-drawn on top of the plates
+  const rollRing = new Graphics();
+  const chipRing = new Graphics();
 
   const chips: ChipView[] = PLAYERS.map((_, playerIndex) => {
     const sprite = new Sprite();
@@ -264,7 +271,7 @@ export function createHud(
   // §7 dialog rule: everything live — dice, roll, pause, message — hides as one layer
   const liveLayer = new Container();
   liveLayer.label = 'hud-live';
-  liveLayer.addChild(diceShadows, diceLayer, dicePulse, sumChip, message, rollButton, pauseButton);
+  liveLayer.addChild(diceShadows, diceLayer, dicePulse, sumChip, message, rollButton, rollRing, chipRing, pauseButton);
 
   root.addChild(
     topPanel,
@@ -282,10 +289,32 @@ export function createHud(
   let remaining: number[] = [];
   let pulse = 0;
   let sumWidth = 150;
+  let rollPlateSize = { width: 348, height: 52 };
+  let rollFocused = false;
+  let lastState: HudState | null = null;
+  let lastActiveChip = -1;
+  let handover: { age: number; chipIndex: number } | null = null;
+  let toss: { age: number; values: number[] } | null = null;
+
+  /** §8 die bounce: two decaying humps over the local timeline, squash on each landing. */
+  function tossPose(t: number): { dy: number; squash: number } {
+    const hop = Math.abs(Math.sin(t * Math.PI * 2)) * (1 - t) ** 1.2;
+    const dy = -40 * hop;
+    const squash = 1 - 0.14 * hop;
+    return { dy, squash };
+  }
+
+  /** Keyboard/TV focus ring on the roll plate; redrawn on flag and layout changes. */
+  function redrawRollRing(): void {
+    rollRing.clear();
+    if (!rollFocused) return;
+    rollRing
+      .roundRect(-rollPlateSize.width / 2 - 5, -rollPlateSize.height / 2 - 5, rollPlateSize.width + 10, rollPlateSize.height + 10, rollPlateSize.height / 2 + 5)
+      .stroke({ width: 3, color: COLORS.brassLight, alpha: 0.95 });
+  }
 
   /** §2 primary button: wood face, #BF8B52 sheen, #40200F drop. */
-  function drawPrimaryPlate(plate: Graphics, plateWidth: number, plateHeight: number): void {
-    plate.roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, plateHeight / 2).fill(COLORS.cell);
+  function drawPrimaryPlate(plate: Graphics, plateWidth: number, plateHeight: number): void {    plate.roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, plateHeight / 2).fill(COLORS.cell);
     plate
       .moveTo(-plateWidth / 2 + plateHeight / 2, -plateHeight / 2 + 2.2)
       .lineTo(plateWidth / 2 - plateHeight / 2, -plateHeight / 2 + 2.2)
@@ -297,6 +326,20 @@ export function createHud(
     plate
       .roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, plateHeight / 2)
       .stroke({ width: 1.5, color: COLORS.brass, alpha: 0.8 });
+  }
+
+  /** Dice face plates: idle tray, unspent/spent, or the §8 toss cycle on top. */
+  function drawDice(state: HudState): void {
+    diceLayer.clear();
+    // §6: the physical dice always sit on the tray; before the first roll they
+    // rest at half light so the primary interaction is never an empty tray
+    if (state.dice.length === 0) {
+      IDLE_DICE.forEach((value, index) => drawDiePlate(index, value, 'idle'));
+    } else {
+      state.dice.forEach((value, index) =>
+        drawDiePlate(index, value, state.remaining.includes(value) ? 'unspent' : 'spent'),
+      );
+    }
   }
 
   function chipLook(playerIndex: number) {
@@ -356,45 +399,48 @@ function strokeArc(
   graphics.stroke(style);
 }
 
-  function drawDiePlate(index: number, value: number, mode: 'unspent' | 'spent' | 'idle'): void {
+  function drawDiePlate(index: number, value: number, mode: 'unspent' | 'spent' | 'idle', pose?: { dy: number; squash: number }): void {
     const die = dice[index];
     if (die === undefined) return;
     const unspent = mode === 'unspent';
     const idle = mode === 'idle';
     const { x, y, size } = die;
+    const dy = pose?.dy ?? 0;
+    const squash = pose?.squash ?? 1;
+    const h = size * squash; // tossed plate lands with a §8 scaleY compress
     const k = size / 96;
     const radius = 18 * k;
     // porcelain stays porcelain while resting (art review #6): full material,
     // muted pips, brass rim — never the spent putty-grey
-    diceLayer.roundRect(x, y, size, size, radius).fill({ color: 0xf2ead8, alpha: idle ? 0.92 : unspent ? 1 : 0.45 });
+    diceLayer.roundRect(x, y + dy, size, h, radius).fill({ color: 0xf2ead8, alpha: idle ? 0.92 : unspent ? 1 : 0.45 });
     if (idle) {
       diceLayer
-        .roundRect(x, y, size, size, radius)
+        .roundRect(x, y + dy, size, h, radius)
         .stroke({ width: 2 * k, color: COLORS.brass, alpha: 0.55 });
     }
     // §3 height-fall: lit top edge, dark lower edge
     diceLayer
-      .moveTo(x + radius * 0.8, y + 1.6 * k)
-      .lineTo(x + size - radius * 0.8, y + 1.6 * k)
+      .moveTo(x + radius * 0.8, y + dy + 1.6 * k)
+      .lineTo(x + size - radius * 0.8, y + dy + 1.6 * k)
       .stroke({ width: 2 * k, color: 0xffffff, alpha: unspent ? 0.7 : 0.3 });
     diceLayer
-      .moveTo(x + radius * 0.8, y + size - 2.2 * k)
-      .lineTo(x + size - radius * 0.8, y + size - 2.2 * k)
+      .moveTo(x + radius * 0.8, y + dy + h - 2.2 * k)
+      .lineTo(x + size - radius * 0.8, y + dy + h - 2.2 * k)
       .stroke({ width: 3 * k, color: COLORS.engraved, alpha: unspent ? 0.28 : 0.15 });
 
-    const pipRadius = 9 * k;
+    const pipRadius = 9 * k * squash;
     const pipColor = unspent ? COLORS.engraved : COLORS.spentPip;
-    const offset = size * 0.26;
+    const offset = h * 0.26;
     const cx = x + size / 2;
-    const cy = y + size / 2;
-    for (const [dx, dy] of PIP_POSITIONS[value] ?? []) {
-      diceLayer.circle(cx + dx * offset, cy + dy * offset, pipRadius).fill({ color: pipColor, alpha: idle ? 0.66 : 1 });
+    const cy = y + dy + h / 2;
+    for (const [px, py] of PIP_POSITIONS[value] ?? []) {
+      diceLayer.circle(cx + px * offset, cy + py * offset, pipRadius).fill({ color: pipColor, alpha: idle ? 0.66 : 1 });
       // light bevel on top of every pip (§6); v8 connects the current path
       // point to a new arc otherwise
       strokeArc(
         diceLayer,
-        cx + dx * offset,
-        cy + dy * offset,
+        cx + px * offset,
+        cy + py * offset,
         pipRadius * 0.86,
         Math.PI * 1.25,
         Math.PI * 1.85,
@@ -404,9 +450,9 @@ function strokeArc(
 
     if (mode === 'spent') {
       diceLayer
-        .moveTo(x + size * 0.7, y + size * 0.55)
-        .lineTo(x + size * 0.78, y + size * 0.63)
-        .lineTo(x + size * 0.9, y + size * 0.4)
+        .moveTo(x + size * 0.7, y + dy + h * 0.55)
+        .lineTo(x + size * 0.78, y + dy + h * 0.63)
+        .lineTo(x + size * 0.9, y + dy + h * 0.4)
         .stroke({ width: 3.5 * k, color: COLORS.brass });
     }
   }
@@ -514,7 +560,11 @@ function strokeArc(
         });
       }
 
-      drawPrimaryPlate(rollPlate, orientation === 'portrait' ? Math.min(width - 24 * pad, 430 * pad) : 348 * pad, 52 * pad);
+      rollPlateSize = {
+        width: orientation === 'portrait' ? Math.min(width - 24 * pad, 430 * pad) : 348 * pad,
+        height: 52 * pad,
+      };
+      drawPrimaryPlate(rollPlate, rollPlateSize.width, rollPlateSize.height);
 
       // dice contact shadows, §3 (3,5) blur 12 alpha 0.35
       for (const { x, y, size } of dice) {
@@ -527,16 +577,8 @@ function strokeArc(
       }
     },
     update(state) {      remaining = [...state.remaining];
-      diceLayer.clear();
-      // §6: the physical dice always sit on the tray; before the first roll they
-      // rest at half light so the primary interaction is never an empty tray
-      if (state.dice.length === 0) {
-        IDLE_DICE.forEach((value, index) => drawDiePlate(index, value, 'idle'));
-      } else {
-        state.dice.forEach((value, index) =>
-          drawDiePlate(index, value, state.remaining.includes(value) ? 'unspent' : 'spent'),
-        );
-      }
+      lastState = state;
+      drawDice(state);
 
       if (state.sumLabel !== null) {
         sumChip.visible = true;
@@ -570,16 +612,91 @@ function strokeArc(
 
       rollButton.alpha = state.canRoll ? 1 : 0.45;
       rollButton.eventMode = state.canRoll ? 'static' : 'none';
+
+      // §8 turn hand-over: the brass rim rolls to the newly active chip
+      const activeChip = state.players.findIndex((player) => player.active);
+      if (activeChip >= 0 && activeChip !== lastActiveChip && lastActiveChip >= 0) {
+        handover = { age: 0, chipIndex: activeChip };
+      }
+      if (activeChip >= 0) lastActiveChip = activeChip;
+      redrawRollRing();
+    },
+    toss(values) {
+      toss = { age: 0, values };
+    },
+    setRollFocused(value) {
+      if (rollFocused === value) return;
+      rollFocused = value;
+      redrawRollRing();
     },
     tick(elapsedMs) {
       pulse += elapsedMs;
       dicePulse.clear();
-      if (remaining.length === 0) return;
-      const alpha = 0.4 + 0.4 * Math.sin((pulse / DICE_PULSE_MS) * Math.PI * 2);
-      for (const die of dice) {
-        dicePulse
-          .roundRect(die.x, die.y, die.size, die.size, 18 * (die.size / 96))
-          .stroke({ width: 2, color: COLORS.brassLight, alpha });
+      chipRing.clear();
+
+      // hand-over rim: 300 ms brass stroke fading out around the new active chip
+      if (handover !== null) {
+        handover.age += elapsedMs;
+        if (handover.age >= 300) {
+          handover = null;
+        } else if (lastState !== null) {
+          const chip = chips[handover.chipIndex];
+          if (chip !== undefined && chip.sprite.visible) {
+            const pad = geometry?.isTv ? TV_PAD : 1;
+            const cw = chipWidth();
+            const rowHeight = ((geometry?.orientation ?? 'portrait') === 'portrait'
+              ? ROW_HEIGHT_PORTRAIT
+              : ROW_HEIGHT_LANDSCAPE) * pad;
+            const t = handover.age / 300;
+            chipRing
+              .roundRect(chip.pos.x - cw / 2 - 3, chip.pos.y - rowHeight / 2 - 3, cw + 6, rowHeight + 6, rowHeight / 2 + 3)
+              .stroke({ width: 2.5 * pad, color: COLORS.brassLight, alpha: (1 - t) * 0.9 });
+          }
+        }
+      }
+
+      if (rollFocused) redrawRollRing();
+
+      // §8 toss: rise 0–120, tumble with cycling faces 120–420, settle 420–560,
+      // second die lags the first by 60 ms; diceLayer redrew only while tossing
+      if (toss !== null && lastState !== null) {
+        toss.age += elapsedMs;
+        diceLayer.clear();
+        const DURATION = 560;
+        const finished = toss.age >= DURATION + 60;
+        for (let index = 0; index < dice.length; index += 1) {
+          if (finished) break;
+          const age = Math.max(0, toss.age - index * 60);
+          const t = Math.min(1, age / DURATION);
+          if (t <= 0) {
+            // the second die stays put until its lag elapses
+            const value = lastState.dice[index] ?? IDLE_DICE[index];
+            if (value !== undefined) drawDiePlate(index, value, 'idle');
+            continue;
+          }
+          const { dy, squash } = tossPose(t);
+          const cycling = t > 120 / DURATION && t < 420 / DURATION;
+          const value = cycling
+            ? Math.floor(Math.random() * 6) + 1
+            : (toss.values[index] ?? lastState.dice[index] ?? 3);
+          drawDiePlate(index, value, 'unspent', { dy, squash });
+        }
+        if (finished) {
+          toss = null;
+          diceLayer.clear();
+          if (lastState !== null) drawDice(lastState);
+        }
+      } else if (remaining.length === 0) {
+        return;
+      }
+
+      if (remaining.length !== 0 && toss === null) {
+        const alpha = 0.4 + 0.4 * Math.sin((pulse / DICE_PULSE_MS) * Math.PI * 2);
+        for (const die of dice) {
+          dicePulse
+            .roundRect(die.x, die.y, die.size, die.size, 18 * (die.size / 96))
+            .stroke({ width: 2, color: COLORS.brassLight, alpha });
+        }
       }
     },
   };

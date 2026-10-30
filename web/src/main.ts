@@ -279,6 +279,7 @@ async function main() {
       visibleLayers,
       debug: params.has('audit'),
       resultOverride: asOutcomeKind(params.get('result')),
+      fxStage: params.get('fx') === 'kill' ? ('kill' as const) : null,
       onPauseRequest: openPause,
       onTurnEnd: (game) => autosave.schedule(game),
       hints: pendingHints(progress),
