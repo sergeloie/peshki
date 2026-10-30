@@ -31,8 +31,11 @@ export const ENGINE_CORNER_TO_VISUAL = [2, 3, 0, 1] as const;
 
 const PITCH = (2 * RING_RADIUS) / 7;
 const HOME_SHRINK = 0.23;
-const BENCH_OFFSET = RING_RADIUS + 108;
-const BENCH_GAP = 52;
+// §4 benches, round-3 revision: slots Ø53 fit the 48px disc; spacing 60 keeps
+// Ø53 discs apart; the row moved out to R+130 so the seated pawn clears the
+// corner cell's outer edge while the slot stays inside the outer rectangle
+const BENCH_OFFSET = RING_RADIUS + 130;
+const BENCH_GAP = 60;
 
 export interface RingCellPosition {
   cellIndex: number;
@@ -81,7 +84,9 @@ export interface BoardGeometry {
 const topology = new BoardTopology(DEFAULT_CONFIG);
 
 export function createBoardGeometry(width: number, height: number): BoardGeometry {
-  const scale = (Math.min(width, height) * 0.92) / BOARD_DESIGN_SIZE;
+  // 0.98: the drawn board must fill ≥ 0.92 of the smaller screen side
+  // across all §7 aspect classes (art review round 3)
+  const scale = (Math.min(width, height) * 0.98) / BOARD_DESIGN_SIZE;
   const center = { x: width / 2, y: height / 2 };
   const project = (point: Point): Point => ({ x: center.x + point.x * scale, y: center.y + point.y * scale });
 

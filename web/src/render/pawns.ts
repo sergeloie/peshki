@@ -10,8 +10,8 @@ const DESIGN_HEIGHT = 112;
 const ANCHOR_Y = 97 / DESIGN_HEIGHT;
 const BRASS_HINT = 0xf3d77b;
 
-/** §5 size and alpha hierarchy per pawn state. BENCH sits inside the Ø44 slot (art-direction §12). */
-const STATE_SCALE = { BENCH: 0.45, NEWBORN: 1, FIELDER: 1, HOMER: 0.8 } as const;
+/** §5 size and alpha hierarchy per pawn state. BENCH: doc's 0.62, now inside Ø53 slots (§12.3a). */
+const STATE_SCALE = { BENCH: 0.62, NEWBORN: 1, FIELDER: 1, HOMER: 0.8 } as const;
 const STATE_ALPHA = { BENCH: 0.75, NEWBORN: 1, FIELDER: 1, HOMER: 0.72 } as const;
 const LIFT_SELECTED = 12; // §5 selected lift, design px
 const PULSE_PERIOD_MS = 1600; // §6 dice pulse rhythm reused for the newborn ring

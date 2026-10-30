@@ -462,8 +462,9 @@ function strokeArc(
           size: diceSize,
         }));
         sumChip.position.set(panelX + panelWidth / 2, dice[dice.length - 1].y + diceSize + 26 * pad);
-        rollButton.position.set(panelX + panelWidth / 2, sumChip.y + 50 * pad);
-        message.position.set(panelX + panelWidth / 2, rollButton.y + 46 * pad);
+        // reading order (round 3): dice → state line → action
+        message.position.set(panelX + panelWidth / 2, sumChip.y + 44 * pad);
+        rollButton.position.set(panelX + panelWidth / 2, message.y + 50 * pad);
 
         // player list fills the rest at phone-readable row height (56 * pad)
         const rowHeight = 56 * pad;

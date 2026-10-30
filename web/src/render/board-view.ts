@@ -172,10 +172,10 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
   }
 
   /**
-   * §4 home tails: three separate porcelain steps per tail (104 → 96 → 88),
-   * narrowing toward the centre, each capped inside the corner tile's inner
-   * edge (design 414) and clear of the medallion (design 118) so the three
-   * cells read distinctly.
+   * §4 home tails: exactly THREE porcelain steps per tail (104 → 96 → 88),
+   * narrowing toward the centre. Spans ±0.36 of the step size leave visible
+   * grooves between steps; the first starts inboard of the corner tile's inner
+   * edge (design 414), the last clears the medallion (design 118).
    */
   function drawHomes(): void {
     const { scale: k, center } = geometry;
@@ -185,13 +185,13 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
       const look = PLAYERS[homes[0].playerIndex];
       for (const home of homes) {
         points.set(home.cellIndex, { x: home.x, y: home.y });
-        addShadow(home.x, home.y, home.size * 1.02, 0.18);
+        addShadow(home.x, home.y, home.size * 0.98, 0.16);
         const d = Math.hypot(home.x - center.x, home.y - center.y);
         const u = normalize({ x: home.x - center.x, y: home.y - center.y });
         const perp = { x: -u.y, y: u.x };
         const s = home.size;
-        const radiusOuter = Math.min(d + s * 0.4, cellInner);
-        const radiusInner = Math.max(d - s * 0.4, medallionEdge);
+        const radiusOuter = Math.min(d + s * 0.36, cellInner);
+        const radiusInner = Math.max(d - s * 0.36, medallionEdge);
         const at = (radius: number, halfWidth: number, sign: number): Point => ({
           x: center.x + u.x * radius + perp.x * halfWidth * sign,
           y: center.y + u.y * radius + perp.y * halfWidth * sign,
@@ -204,15 +204,11 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
         ];
         tailsG.poly(poly).fill(COLORS.ivory);
         tailsG.poly(poly).stroke({ width: 1.6 * k, color: look.color, alpha: 0.9 });
-        // thickness on the outer edge away from the light, lit inner rim (§3)
+        // one thickness line under the outer edge, away from the light (§3)
         tailsG
           .moveTo(poly[0].x, poly[0].y)
           .lineTo(poly[1].x, poly[1].y)
           .stroke({ width: 2.6 * k, color: COLORS.ivoryDeep, alpha: 0.6 });
-        tailsG
-          .moveTo(poly[2].x, poly[2].y)
-          .lineTo(poly[3].x, poly[3].y)
-          .stroke({ width: 1.4 * k, color: COLORS.cellLight, alpha: 0.45 });
       }
     }
   }
@@ -225,12 +221,12 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
     medallion.position.set(center.x - diameter / 2, center.y - diameter / 2);
   }
 
-  /** §4 benches: four recessed holes with rim light. */
+  /** §4 benches: four recessed seats Ø53 with rim light. */
   function drawBenchSlots(): void {
     const { scale: k } = geometry;
     for (const benches of geometry.benches) {
       for (const slot of benches) {
-        const r = 22 * k;
+        const r = 26.5 * k;
         benchesG.circle(slot.x, slot.y, r).fill(COLORS.engraved);
         strokeArc(benchesG, slot.x, slot.y - 1 * k, r * 0.8, Math.PI * 0.12, Math.PI * 0.55, {
           width: 3 * k,
