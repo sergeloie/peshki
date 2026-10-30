@@ -24,6 +24,8 @@ export interface PawnViews {
   benchPoint(playerIndex: number, pawnIndex: number): Point;
   setDisabled(playerIndex: number, disabledPawnIndices: readonly number[]): void;
   setSelected(ref: PawnRef | null): void;
+  /** Art review #8 handover: portrait geometry cannot fit legible bench pawns — hide them there. */
+  setBenchVisible(visible: boolean): void;
   /** Newborn ring pulse; drive from a ticker with delta ms. */
   tick(elapsedMs: number): void;
 }
@@ -44,6 +46,7 @@ export function createPawnViews(
   const disabled: number[][] = [[], [], [], []];
   let selected: PawnRef | null = null;
   let pulsePhase = 0;
+  let benchShown = true;
 
   for (let playerIndex = 0; playerIndex < board.config.numberOfPlayers; playerIndex += 1) {
     const row: Container[] = [];
@@ -88,6 +91,8 @@ export function createPawnViews(
         sprite.position.set(point.x, point.y - (isSelected ? LIFT_SELECTED * geometry.scale : 0));
         sprite.scale.set(geometry.scale * STATE_SCALE[state]);
         sprite.alpha = isDisabled ? 0.55 : STATE_ALPHA[state];
+        // #8 handover: portrait bench pawns are ~18x20 px — the player chips carry the count
+        sprite.visible = benchShown || state !== 'BENCH';
         bodies[playerIndex][pawnIndex].texture = isDisabled
           ? pawnTextures.washed[playerIndex]
           : pawnTextures.normal[playerIndex];
@@ -163,6 +168,11 @@ export function createPawnViews(
     benchPoint,
     setDisabled(playerIndex, disabledPawnIndices) {
       disabled[playerIndex] = [...disabledPawnIndices];
+      sync();
+    },
+    setBenchVisible(visible) {
+      if (benchShown === visible) return;
+      benchShown = visible;
       sync();
     },
     setSelected(ref) {

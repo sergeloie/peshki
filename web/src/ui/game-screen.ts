@@ -734,6 +734,9 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       boardLayer.position.set(gameLayout.board.x, gameLayout.board.y);
       boardView.layout(geometry);
       pawnViews.layout(geometry);
+      // #8 art handover: portrait bench pawns sit ~18x20 px — unreadable; the chip count (×4) carries it.
+      // Landscape/TV keeps them at ~33x37 px. Bench slots themselves stay drawn.
+      pawnViews.setBenchVisible(!(gameLayout.orientation === 'portrait' && !gameLayout.isTv));
       hud.layout(width, height, gameLayout);
       tutorial.layout(width, height, gameLayout);
       root.hitArea = new Rectangle(0, 0, width, height);
