@@ -19,6 +19,7 @@ import { createTableSurface } from './render/table-surface';
 import { loadFonts } from './render/fonts';
 import { audio } from './render/audio';
 import { configureSafeArea } from './render/hud';
+import { sharedTextures } from './render/table-surface';
 import { pickLanguage, setLanguage, t } from './i18n';
 import { createGameScreen } from './ui/game-screen';
 import type { GameOutcome, GameScreen } from './ui/game-screen';
@@ -377,7 +378,20 @@ async function main() {
 
   // ?audit=1 — screenshot harness hooks; not part of the shipping surface
   if (typeof URLSearchParams !== 'undefined' && new URLSearchParams(window.location.search).has('audit')) {
-    (window as unknown as Record<string, unknown>).__peshki = { app };
+    // texture memory estimate for the audit json (RGBA 4bpp over every shared procedural source)
+    const shared = sharedTextures();
+    const bytesOf = (texture: { source: { pixelWidth: number; pixelHeight: number } }): number =>
+      texture.source.pixelWidth * texture.source.pixelHeight * 4;
+    const textureBytes =
+      bytesOf(shared.wood) +
+      bytesOf(shared.vignette) +
+      bytesOf(shared.grain) +
+      bytesOf(shared.shadow) +
+      bytesOf(shared.cellShadow) +
+      bytesOf(shared.medallion) +
+      bytesOf(shared.glow) +
+      bytesOf(shared.spark);
+    (window as unknown as Record<string, unknown>).__peshki = { app, textureBytes };
   }
 
   // ?screen=game&seed=… — debug route used by the screenshot battery

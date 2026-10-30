@@ -609,6 +609,7 @@ function strokeArc(
         height: 52 * pad,
       };
       drawPrimaryPlate(rollPlate, rollPlateSize.width, rollPlateSize.height);
+      redrawRollRing(); // focus ring follows the plate dims on resize
 
       // dice contact shadows, §3 (3,5) blur 12 alpha 0.35
       for (const { x, y, size } of dice) {
@@ -698,8 +699,6 @@ function strokeArc(
           }
         }
       }
-
-      if (rollFocused) redrawRollRing();
 
       // §8 toss: rise 0–120, tumble with cycling faces 120–420, settle 420–560,
       // second die lags the first by 60 ms; diceLayer redrew only while tossing
