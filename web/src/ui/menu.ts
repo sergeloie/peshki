@@ -1,61 +1,81 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Text } from 'pixi.js';
 import { FONTS } from '../render/fonts';
-import { COLORS } from '../render/palette';
-import { STRINGS } from './strings';
+import { t } from '../i18n';
+import type { StringKey } from '../i18n';
+import { attachKeyGroup } from './keys';
+import type { KeyGroup } from './keys';
+import { createButton } from './widgets';
+import type { Button, ButtonKind } from './widgets';
+
+export interface MenuOptions {
+  onPlay?: () => void;
+  /** Optional resume entry point: ticket #16 builds the autosave that feeds it. */
+  onContinue?: () => void;
+  onHowto?: () => void;
+  onSettings?: () => void;
+}
 
 export interface Menu {
   root: Container;
   layout(width: number, height: number): void;
+  group: KeyGroup;
 }
 
-export function createMenu(options: { title: string; onPlay?: () => void }): Menu {
+export function createMenu(options: MenuOptions): Menu {
   const root = new Container();
 
-  // §9: Playfair Display carries the club-table title
+  // §9: Playfair Display carries the club-table title; every label travels with layout()
   const heading = new Text({
-    text: options.title,
+    text: '',
     style: { fill: 0xf2e8dc, fontFamily: FONTS.display, fontWeight: '600' },
   });
   heading.anchor.set(0.5);
 
-  const button = new Container();
-  const plate = new Graphics();
-  plate.roundRect(-160, -27, 320, 54, 27).fill(COLORS.cell);
-  plate
-    .moveTo(-118, -24.5)
-    .lineTo(118, -24.5)
-    .stroke({ width: 2, color: COLORS.cellLight, alpha: 0.6 });
-  plate
-    .moveTo(-118, 24)
-    .lineTo(118, 24)
-    .stroke({ width: 3, color: COLORS.cellDeep, alpha: 0.85 });
-  plate.roundRect(-160, -27, 320, 54, 27).stroke({ width: 1.5, color: COLORS.brass, alpha: 0.8 });
-  const label = new Text({
-    text: STRINGS.menuPlay,
-    style: { fill: 0xf2e8dc, fontFamily: FONTS.body, fontWeight: '700' },
-  });
-  label.anchor.set(0.5);
-  button.addChild(plate, label);
-  button.eventMode = 'static';
-  button.cursor = 'pointer';
-  // §8 press: scale 0.96
-  button.on('pointerdown', () => button.scale.set(0.96));
-  const release = () => button.scale.set(1);
-  button.on('pointerup', release);
-  button.on('pointerupoutside', release);
-  button.on('pointerleave', release);
-  if (options.onPlay) button.on('pointertap', options.onPlay);
+  interface Entry {
+    button: Button;
+    labelKey: StringKey;
+    height: number;
+  }
 
-  root.addChild(heading, button);
+  const entries: Entry[] = [];
+  const push = (labelKey: StringKey, kind: ButtonKind, height: number, onTap?: () => void): void => {
+    if (onTap === undefined) return;
+    entries.push({ button: createButton(t(labelKey), { kind, width: 340, height, onTap }), labelKey, height });
+  };
+
+  push('pause.resume', 'secondary', 52, options.onContinue);
+  push('menu.play', 'primary', 56, options.onPlay);
+  push('menu.howto', 'secondary', 52, options.onHowto);
+  push('menu.settings', 'secondary', 52, options.onSettings);
+
+  const buttons = entries.map((entry) => entry.button);
+  const group: KeyGroup = { root, focusable: () => buttons };
+  for (const button of buttons) {
+    root.addChild(button.root);
+  }
+  root.addChild(heading);
+  attachKeyGroup(group);
 
   return {
     root,
-    layout(width, height) {
-      const shorter = Math.min(width, height);
+    group,
+    layout(viewWidth, viewHeight) {
+      heading.text = t('app.title');
+      const shorter = Math.min(viewWidth, viewHeight);
 
       heading.style.fontSize = Math.max(28, Math.min(shorter * 0.1, 84));
-      heading.position.set(width / 2, height * 0.42);
-      button.position.set(width / 2, height * 0.42 + heading.height / 2 + shorter * 0.09);
+      heading.position.set(viewWidth / 2, viewHeight * 0.24);
+
+      const buttonWidth = Math.min(340, shorter * 0.82);
+      const fontSize = Math.round(Math.max(17, Math.min(shorter * 0.032, 21)));
+      let y = viewHeight * 0.24 + heading.height / 2 + shorter * 0.12;
+      for (const entry of entries) {
+        entry.button.setLabel(t(entry.labelKey));
+        entry.button.setSize(buttonWidth, entry.height);
+        entry.button.root.position.set(viewWidth / 2, y);
+        entry.button.setFont(fontSize);
+        y += entry.height / 2 + shorter * 0.095;
+      }
     },
   };
 }

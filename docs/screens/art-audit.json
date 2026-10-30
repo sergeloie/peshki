@@ -1,50 +1,50 @@
 {
   "rendering": "software renderer (SwiftShader); a device 60 fps number is ticket #8 on real hardware",
   "textureBudget": {
-    "canvasesCreatedAtBoot": 27,
+    "canvasesCreatedAtBoot": 28,
     "canvasesCreatedWhileIdle": 0,
     "pass": true
   },
   "staticSceneCost": {
-    "renderTreeNodes": 143,
+    "renderTreeNodes": 153,
     "sprites": 81,
-    "graphics": 30,
+    "graphics": 35,
     "filtersInTree": 0,
     "masksInTree": 0
   },
   "downloadBudget": {
-    "artBytes": 187564,
+    "artBytes": 216412,
     "artBudgetBytes": 3000000,
     "artBudgetPass": true,
-    "totalRequestBytes": 7725088,
+    "totalRequestBytes": 7888221,
     "topResources": [
       {
-        "resource": "pixi__js.js?v=dd6fefe1",
+        "resource": "pixi__js.js?v=19d8aa4e",
         "bytes": 3790180,
         "art": false
       },
       {
-        "resource": "CanvasPool-CKBgjVg_.js?v=dd6fefe1",
+        "resource": "CanvasPool-CKBgjVg_.js?v=c2cc1907",
         "bytes": 718477,
         "art": false
       },
       {
-        "resource": "GraphicsContext-DbBaCOsL.js?v=dd6fefe1",
+        "resource": "GraphicsContext-DbBaCOsL.js?v=c2cc1907",
         "bytes": 672281,
         "art": false
       },
       {
-        "resource": "RenderTargetSystem-BdFca6T7.js?v=dd6fefe1",
+        "resource": "RenderTargetSystem-BdFca6T7.js?v=c2cc1907",
         "bytes": 435903,
         "art": false
       },
       {
-        "resource": "Filter-CteG7TAT.js?v=dd6fefe1",
+        "resource": "Filter-CteG7TAT.js?v=c2cc1907",
         "bytes": 390437,
         "art": false
       },
       {
-        "resource": "FederatedEventTarget-jrCASupg.js?v=dd6fefe1",
+        "resource": "FederatedEventTarget-jrCASupg.js?v=c2cc1907",
         "bytes": 318711,
         "art": false
       }

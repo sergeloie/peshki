@@ -3,6 +3,7 @@ import type { FederatedPointerEvent, Ticker } from 'pixi.js';
 import { Game, createBot, seededRandom } from '../engine';
 import type { Difficulty, Move, PawnRef } from '../engine';
 import { HANDOVER_MS, decisionDelay } from '../game/pacing';
+import type { HintId } from '../game/progress';
 import { createBoardGeometry } from '../render/board-geometry';
 import { createBoardView } from '../render/board-view';
 import { createPawnViews } from '../render/pawns';
@@ -10,11 +11,25 @@ import { createHud, computeGameLayout } from '../render/hud';
 import type { GameLayout } from '../render/hud';
 import { sharedTextures } from '../render/table-surface';
 import { PLAYERS } from '../render/palette';
-import { STRINGS, format, seatLabel } from './strings';
+import { format, t } from '../i18n';
+import { seatLabel } from './players';
+import { createTutorialBanner } from './tutorial';
+import { HINT_TEXT_KEYS } from './hints';
+
+export type GameOutcomeKind = 'win' | 'lose' | 'draw';
+
+export interface GameOutcome {
+  kind: GameOutcomeKind;
+  /** Winning seat; null on a draw. */
+  winnerSeat: number | null;
+  turns: number;
+}
 
 export interface GameScreen {
   root: Container;
   layout(width: number, height: number): void;
+  /** Stops the ticker work and releases the tree; used when leaving the game. */
+  dispose(): void;
 }
 
 export interface GameScreenOptions {
@@ -28,7 +43,14 @@ export interface GameScreenOptions {
   visibleLayers?: ReadonlySet<string>;
   /** Debug harness: expose world-bounds probe for the audit test. */
   debug?: boolean;
-  onGameOver?(): void;
+  /** Debug harness (#7 shots): stage a finished result over a live board. */
+  resultOverride?: GameOutcomeKind;
+  /** HUD pause button lands here; main owns the pause dialog. */
+  onPauseRequest?: () => void;
+  /** First-game hint ids still to teach, persisted through the progress blob. */
+  hints?: readonly HintId[];
+  onHintDismissed?(id: HintId): void;
+  onGameOver?(outcome: GameOutcome): void;
 }
 
 export function createGameScreen(options: GameScreenOptions): GameScreen {
@@ -43,24 +65,45 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
   const textures = sharedTextures();
   const boardView = createBoardView(geometry, textures);
   const pawnViews = createPawnViews(game.board, geometry, textures, boardView.pointOf);
-  const hud = createHud(textures, { onRoll, onSum });
+  const hud = createHud(textures, { onRoll, onSum, onPause: options.onPauseRequest });
   if (options.visibleLayers !== undefined) {
     boardView.setLayerVisible(options.visibleLayers);
     pawnViews.root.visible = options.visibleLayers.has('pawns');
     hud.root.visible = options.visibleLayers.has('hud');
   }
 
+  // first-game tutorial: one concept line, dismissed before the next
+  const tutorial = createTutorialBanner(() => dismissHint());
+  let hintQueue: readonly HintId[] = options.hints ?? [];
+
+  function dismissHint(): void {
+    const id = hintQueue[0];
+    hintQueue = hintQueue.slice(1);
+    if (id !== undefined) options.onHintDismissed?.(id);
+    advanceHint();
+  }
+
+  function advanceHint(): void {
+    const next = hintQueue[0];
+    if (next === undefined || finished || game.gameOver) {
+      tutorial.hide();
+      return;
+    }
+    tutorial.show(t(HINT_TEXT_KEYS[next]));
+  }
+
   const boardLayer = new Container();
   boardLayer.addChild(boardView.root, pawnViews.root);
 
   const root = new Container();
-  root.addChild(boardLayer, hud.root);
+  root.addChild(boardLayer, hud.root, tutorial.root);
   root.eventMode = 'static';
 
-  options.ticker.add(() => {
+  const tick = (): void => {
     pawnViews.tick(options.ticker.deltaMS);
     hud.tick(options.ticker.deltaMS);
-  });
+  };
+  options.ticker.add(tick);
 
   let selected: PawnRef | null = null;
   let pending: Move[] = [];
@@ -320,7 +363,12 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     selected = null;
     pawnViews.setSelected(null);
     boardView.highlight([]);
-    options.onGameOver?.();
+    tutorial.hide();
+    options.onGameOver?.({
+      kind: game.result === 'draw' ? 'draw' : game.winnerPlayerIndex === 0 ? 'win' : 'lose',
+      winnerSeat: game.result === 'draw' ? null : game.winnerPlayerIndex,
+      turns: game.turnNumber,
+    });
   }
 
   /** §4 corner plate symbols hide as soon as a pawn stands on the corner. */
@@ -363,9 +411,9 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       canRoll: !busy && !game.gameOver && game.isHuman(game.playerIndex) && game.remainingDice.length === 0,
       sumLabel:
         sumMoves.length > 0 && dice.length === 2
-          ? format(STRINGS.gameSumHint, { sum: dice[0] + dice[1], a: dice[0], b: dice[1] })
+          ? format(t('game.sumHint'), { sum: dice[0] + dice[1], a: dice[0], b: dice[1] })
           : null,
-      message: resultMessage(game) ?? stateMessage(),
+      message: stateMessage(),
       players: PLAYERS.map((_, playerIndex) => ({
         playerIndex,
         name: seatLabel(playerIndex),
@@ -376,12 +424,53 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
   }
 
   function stateMessage(): string | null {
-    if (noMoves) return STRINGS.gameNoMoves;
-    if (thinking) return `${seatLabel(game.playerIndex)} ${STRINGS.gameBotThinking}`;
-    if (game.isHuman(game.playerIndex)) {
-      return game.remainingDice.length > 0 ? STRINGS.gameYourMove : STRINGS.gameYourMoveRoll;
+    if (game.gameOver) return null; // result dialogs take over the message line
+    if (noMoves) {
+      return exactCornerStuck() ? t('game.exactCorner') : t('game.noMoves');
     }
-    return STRINGS.gameBotMove;
+    if (thinking) return `${seatLabel(game.playerIndex)} ${t('game.thinking')}`;
+    if (game.isHuman(game.playerIndex)) {
+      return game.remainingDice.length > 0 ? t('game.yourMove') : t('game.yourMoveRoll');
+    }
+    return t('game.botMove');
+  }
+
+  /**
+   * The all-but-one-home standoff: nothing is legal, the last field pawn must
+   * reach the corner exactly, so the refusal deserves its own explanation.
+   */
+  function exactCornerStuck(): boolean {
+    const playerIndex = game.playerIndex;
+    if (game.board.countHome(playerIndex) !== game.config.numberOfPawns - 1) return false;
+    if (game.legalMoves().length > 0) return false;
+    for (let pawnIndex = 0; pawnIndex < game.config.numberOfPawns; pawnIndex += 1) {
+      const isFieldPawn =
+        !game.board.isBench(playerIndex, pawnIndex) &&
+        !game.board.isHome(playerIndex, pawnIndex) &&
+        !game.board.isNewborn(playerIndex, pawnIndex);
+      if (isFieldPawn) return true;
+    }
+    return false;
+  }
+
+  // debug harness (#7 screenshots): stage one of the three results over a live board
+  if (options.resultOverride && !finished) {
+    busy = true;
+    const kind = options.resultOverride;
+    setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      pending = [];
+      selected = null;
+      pawnViews.setSelected(null);
+      boardView.highlight([]);
+      tutorial.hide();
+      options.onGameOver?.({
+        kind,
+        winnerSeat: kind === 'win' ? 0 : 1,
+        turns: 24,
+      });
+    }, 1200);
   }
 
   return {
@@ -393,6 +482,7 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       boardView.layout(geometry);
       pawnViews.layout(geometry);
       hud.layout(width, height, gameLayout);
+      tutorial.layout(width, height, gameLayout);
       root.hitArea = new Rectangle(0, 0, width, height);
       if (options.debug) {
         // measured, not asserted: frame rects and pawn boxes in screen px
@@ -426,6 +516,12 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       setSelection(null, game.isHuman(game.playerIndex) ? game.legalMoves() : []);
       refreshCorners();
       refreshHud();
+      advanceHint();
+    },
+    dispose() {
+      options.ticker.remove(tick);
+      tutorial.hide();
+      root.destroy({ children: true });
     },
   };
 }
@@ -433,13 +529,6 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
 function sumMovesFor(game: Game): Move[] {
   if (game.remainingDice.length !== 2 || game.rolledDice.length !== 2) return [];
   return game.legalMoves().filter((move) => move.kind === 'step' && move.consumedDice.length === 2);
-}
-
-/** One plain line until ticket #7 builds the real victory screens. */
-function resultMessage(game: Game): string | null {
-  if (!game.gameOver) return null;
-  if (game.result === 'draw') return format(STRINGS.resultDraw, { n: game.config.maxTurns });
-  return format(STRINGS.resultWinner, { n: game.winnerPlayerIndex + 1 });
 }
 
 function sleep(ms: number): Promise<void> {
