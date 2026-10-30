@@ -9,6 +9,8 @@ export interface HudState {
   remaining: number[];
   canRoll: boolean;
   sumLabel: string | null;
+  /** Plain result line: who won or that it is a draw (§11); real screens are ticket #7. */
+  message: string | null;
 }
 
 export interface HudView {
@@ -34,6 +36,9 @@ export function createHud(handlers: { onRoll(): void; onSum(): void }): HudView 
   sumLabel.anchor.set(0.5);
   sumButton.addChild(sumPlate, sumLabel);
 
+  const message = new Text({ text: '', style: { fill: COLORS.brassLight, fontFamily: FONT, fontWeight: '700' } });
+  message.anchor.set(0, 0.5);
+
   rollButton.eventMode = 'static';
   rollButton.cursor = 'pointer';
   rollButton.on('pointertap', handlers.onRoll);
@@ -41,7 +46,7 @@ export function createHud(handlers: { onRoll(): void; onSum(): void }): HudView 
   sumButton.cursor = 'pointer';
   sumButton.on('pointertap', handlers.onSum);
 
-  root.addChild(panel, diceGraphics, rollButton, sumButton);
+  root.addChild(panel, diceGraphics, rollButton, sumButton, message);
 
   let dieSize = 56;
   let top = 0;
@@ -75,6 +80,9 @@ export function createHud(handlers: { onRoll(): void; onSum(): void }): HudView 
       sumPlate.clear().roundRect(-sumWidth / 2, -20, sumWidth, 40, 20).fill({ color: COLORS.panel, alpha: 0.9 });
       sumPlate.roundRect(-sumWidth / 2, -20, sumWidth, 40, 20).stroke({ width: 2, color: COLORS.brass });
       sumLabel.style.fontSize = 17;
+
+      message.position.set(14, top + 22);
+      message.style.fontSize = Math.max(13, Math.min(19, nextWidth * 0.03));
     },
     update(state) {
       diceGraphics.clear();
@@ -92,6 +100,9 @@ export function createHud(handlers: { onRoll(): void; onSum(): void }): HudView 
 
       sumButton.visible = state.sumLabel !== null;
       if (state.sumLabel !== null) sumLabel.text = state.sumLabel;
+
+      message.visible = state.message !== null;
+      if (state.message !== null) message.text = state.message;
     },
   };
 }

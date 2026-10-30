@@ -1,22 +1,26 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import type { FederatedPointerEvent } from 'pixi.js';
-import { Game, seededRandom } from '../engine';
+import { Game, firstLegalMove, seededRandom } from '../engine';
 import type { Move, PawnRef } from '../engine';
 import { createBoardGeometry } from '../render/board-geometry';
 import { createBoardView } from '../render/board-view';
 import { createPawnViews } from '../render/pawns';
 import { HUD_HEIGHT, createHud } from '../render/hud';
 import { COLORS } from '../render/palette';
-import { nextRollerAfterDiceSpent } from '../game/flow';
 
 export interface GameScreen {
   root: Container;
   layout(width: number, height: number): void;
 }
 
-export function createGameScreen(): GameScreen {
+export interface GameScreenOptions {
+  onGameOver?(): void;
+}
+
+export function createGameScreen(options: GameScreenOptions = {}): GameScreen {
   const game = new Game({ random: seededRandom(Date.now() >>> 0) });
   let geometry = createBoardGeometry(1, 1);
+  let finished = false;
 
   const boardView = createBoardView(geometry);
   const pawnViews = createPawnViews(game.board, geometry, boardView.pointOf);
@@ -31,7 +35,7 @@ export function createGameScreen(): GameScreen {
   let busy = false;
 
   root.on('pointertap', (event: FederatedPointerEvent) => {
-    if (busy) return;
+    if (busy || game.gameOver) return;
     const point = event.getLocalPosition(root);
 
     const pawn = pawnAt(point.x, point.y);
@@ -53,23 +57,21 @@ export function createGameScreen(): GameScreen {
   });
 
   function onRoll(): void {
-    if (busy || game.remainingDice.length > 0) return;
-    const roller = nextRollerAfterDiceSpent(game.playerIndex);
-    if (roller !== game.playerIndex) return;
+    if (busy || game.gameOver || game.remainingDice.length > 0 || !game.isHuman(game.playerIndex)) return;
 
     const events = game.rollDice();
     if (events.some((event) => event.type === 'moveRejected')) return;
-    if (game.legalMoves().length === 0) game.pass();
 
     selected = null;
     selection.clear();
+    driveBots();
     pending = game.legalMoves();
     boardView.highlight(pending.map((move) => move.targetCellIndex));
     refreshHud();
   }
 
   function onSum(): void {
-    if (busy) return;
+    if (busy || game.gameOver) return;
     const sumMoves = sumMovesFor(game);
     if (sumMoves.length === 0) return;
     if (sumMoves.length === 1) {
@@ -84,7 +86,7 @@ export function createGameScreen(): GameScreen {
   }
 
   async function play(move: Move): Promise<void> {
-    if (busy) return;
+    if (busy || game.gameOver) return;
     const path =
       move.kind === 'step'
         ? game.board.stepPath(move.playerIndex, move.pawnIndex, move.steps)
@@ -147,13 +149,28 @@ export function createGameScreen(): GameScreen {
     }
 
     pawnViews.sync();
-    if (game.remainingDice.length > 0) {
-      if (game.legalMoves().length === 0) game.pass();
-      else pending = game.legalMoves();
-    }
+    driveBots();
+    pending = game.gameOver ? [] : game.legalMoves();
     busy = false;
     boardView.highlight(pending.map((candidate) => candidate.targetCellIndex));
     refreshHud();
+  }
+
+  /** Every seat that is not the human plays itself: placeholder first-legal-move (#5). */
+  function driveBots(): void {
+    while (!game.gameOver && !game.isHuman(game.playerIndex)) game.playSeatTurn(firstLegalMove);
+    pawnViews.sync();
+    if (game.gameOver) finishGame();
+  }
+
+  function finishGame(): void {
+    if (finished) return;
+    finished = true;
+    pending = [];
+    selected = null;
+    selection.clear();
+    boardView.highlight([]);
+    options.onGameOver?.();
   }
 
   function pawnAt(x: number, y: number): PawnRef | null {
@@ -188,11 +205,12 @@ export function createGameScreen(): GameScreen {
     hud.update({
       dice: game.rolledDice,
       remaining: game.remainingDice,
-      canRoll: !busy && game.remainingDice.length === 0,
+      canRoll: !busy && !game.gameOver && game.isHuman(game.playerIndex) && game.remainingDice.length === 0,
       sumLabel:
         sumMoves.length > 0 && game.rolledDice.length === 2
           ? `${game.rolledDice[0] + game.rolledDice[1]} = ${game.rolledDice[0]} + ${game.rolledDice[1]}`
           : null,
+      message: resultMessage(game),
     });
   }
 
@@ -214,6 +232,13 @@ export function createGameScreen(): GameScreen {
 function sumMovesFor(game: Game): Move[] {
   if (game.remainingDice.length !== 2 || game.rolledDice.length !== 2) return [];
   return game.legalMoves().filter((move) => move.kind === 'step' && move.consumedDice.length === 2);
+}
+
+/** One plain line until ticket #7 builds the real victory screens. */
+function resultMessage(game: Game): string | null {
+  if (!game.gameOver) return null;
+  if (game.result === 'draw') return `Ничья: лимит ${game.config.maxTurns} ходов`;
+  return `Победил игрок ${game.winnerPlayerIndex + 1}`;
 }
 
 function animate(duration: number, onUpdate: (t: number) => void): Promise<void> {

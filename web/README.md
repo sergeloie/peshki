@@ -42,7 +42,16 @@ every SDK call becomes a no-op.
 | `src/game/flow.ts` | Screen flow; owns the single `LoadingAPI.ready()` signal. |
 | `src/render/app.ts` | Pixi application, resize, resolution cap, ticker pause. |
 | `src/ui/menu.ts` | Table surface, title, Play button. |
+| `src/ui/game-screen.ts` | Board, dice HUD, human taps, seats driven by `firstLegalMove`. |
 | `test/` | vitest: engine boundaries, lifecycle, facade fallback. |
 
 `src/engine/` holds pure game logic and must not import `pixi.js`, `platform`, `render`, `ui` or
 `audio`; `test/boundary.test.ts` enforces that.
+
+| Engine file | Purpose |
+|---|---|
+| `game.ts` | The session: turn ownership, dice ledger, extra roll, win and draw. |
+| `win.ts`, `turn-policy.ts` | Win condition (§11) and the extra-roll rule (§10.3), one place each. |
+| `selectors.ts` | `MoveSelector`; `firstLegalMove` is the placeholder seat driver of ticket #5. |
+| `save.ts` | Snapshot, restore and the desktop-compatible JSON text. |
+| `test/engine/fuzz.test.ts` | Invariant fuzzer; `PESHKI_FUZZ_GAMES=100000` for the release run. |

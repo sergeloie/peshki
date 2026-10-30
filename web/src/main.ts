@@ -18,9 +18,10 @@ async function main() {
     title: TITLE,
     onPlay: () => {
       app.stage.removeChild(menu.root);
-      screen = createGameScreen();
+      screen = createGameScreen({ onGameOver: () => platform.setGameplayActive(false) });
       app.stage.addChild(screen.root);
       screen.layout(app.screen.width, app.screen.height);
+      platform.setGameplayActive(true);
     },
   });
   app.stage.addChild(menu.root);
