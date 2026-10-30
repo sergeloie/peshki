@@ -19,6 +19,8 @@ export interface Menu {
   root: Container;
   layout(width: number, height: number): void;
   group: KeyGroup;
+  /** Resume entry point: hidden when no unfinished match is stored. */
+  setContinueVisible(visible: boolean): void;
 }
 
 export function createMenu(options: MenuOptions): Menu {
@@ -49,7 +51,7 @@ export function createMenu(options: MenuOptions): Menu {
   push('menu.settings', 'secondary', 52, options.onSettings);
 
   const buttons = entries.map((entry) => entry.button);
-  const group: KeyGroup = { root, focusable: () => buttons };
+  const group: KeyGroup = { root, focusable: () => buttons.filter((button) => button.root.visible) };
   for (const button of buttons) {
     root.addChild(button.root);
   }
@@ -59,6 +61,11 @@ export function createMenu(options: MenuOptions): Menu {
   return {
     root,
     group,
+    setContinueVisible(visible) {
+      const entry = entries[0];
+      if (entry === undefined || entry.labelKey !== 'pause.resume') return;
+      entry.button.root.visible = visible;
+    },
     layout(viewWidth, viewHeight) {
       heading.text = t('app.title');
       const shorter = Math.min(viewWidth, viewHeight);
@@ -70,6 +77,7 @@ export function createMenu(options: MenuOptions): Menu {
       const fontSize = Math.round(Math.max(17, Math.min(shorter * 0.032, 21)));
       let y = viewHeight * 0.24 + heading.height / 2 + shorter * 0.12;
       for (const entry of entries) {
+        if (!entry.button.root.visible) continue;
         entry.button.setLabel(t(entry.labelKey));
         entry.button.setSize(buttonWidth, entry.height);
         entry.button.root.position.set(viewWidth / 2, y);

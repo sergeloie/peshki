@@ -1,12 +1,16 @@
 import { createFlow } from './game/flow';
+import { createMatchAutosave } from './game/match-save';
 import {
   effectiveDifficulty,
   loadGameProgress,
   pendingHints,
   persistProgress,
   recordCompletedGame,
+  withMatch,
+  withoutMatch,
 } from './game/progress';
 import type { GameProgress } from './game/progress';
+import type { SavedGame } from './engine/save';
 import { bindLifecycle } from './platform/lifecycle';
 import { createPlatform } from './platform/ysdk';
 import type { Container } from 'pixi.js';
@@ -62,6 +66,20 @@ async function main() {
     void persistProgress(platform, progress).catch((error) => console.warn('[progress] save failed', error));
   }
 
+  // One debounced writer for the live match; failures stay off the player's screen.
+  const autosave = createMatchAutosave(async (saved) => {
+    progress = withMatch(progress, saved, Date.now());
+    await persistProgress(platform, progress);
+  });
+
+  /** Finishing or replacing a match drops it so the next boot offers no corpse. */
+  function clearMatch(): void {
+    autosave.reset();
+    if (progress.match === null) return;
+    progress = withoutMatch(progress);
+    pushSave(progress);
+  }
+
   function closeGame(): void {
     if (screen !== null) {
       screen.dispose();
@@ -71,6 +89,7 @@ async function main() {
   }
 
   function openMenu(): void {
+    menu.setContinueVisible(progress.match !== null);
     app.stage.addChild(menu.root);
     menu.layout(app.screen.width, app.screen.height);
   }
@@ -91,6 +110,7 @@ async function main() {
 
   function openPause(): void {
     if (screen === null || dialogStack.includes(pauseDialog)) return;
+    autosave.flush();
     showPauseCard();
     openDialog(pauseDialog);
     platform.setPaused(true);
@@ -110,6 +130,7 @@ async function main() {
           label: t('exit.yes'),
           primary: true,
           onTap: () => {
+            autosave.flush();
             closeDialog(pauseDialog);
             platform.setPaused(false);
             closeGame();
@@ -238,8 +259,10 @@ async function main() {
     modal.dispose?.();
   }
 
-  function startGame(seed?: number): void {
+  function startGame(seed?: number, saved?: SavedGame): void {
     if (screen !== null) return;
+    // A resume continues the stored match; anything else discards it.
+    if (saved === undefined) clearMatch();
     app.stage.removeChild(menu.root);
     app.stage.addChild(table.root); // table stays under the game
     // debug harness (art review #6): ?layers=a,b hides everything else
@@ -252,10 +275,12 @@ async function main() {
       difficulty: effectiveDifficulty(progress),
       ticker: app.ticker,
       seed,
+      saved,
       visibleLayers,
       debug: params.has('audit'),
       resultOverride: asOutcomeKind(params.get('result')),
       onPauseRequest: openPause,
+      onTurnEnd: (game) => autosave.schedule(game),
       hints: pendingHints(progress),
       onHintDismissed: (id) => {
         if (progress.hintsSeen.includes(id)) return;
@@ -264,6 +289,8 @@ async function main() {
       },
       onGameOver: (outcome) => {
         platform.setGameplayActive(false);
+        autosave.reset();
+        progress = withoutMatch(progress);
         void recordCompletedGame(platform, progress)
           .then((next) => {
             progress = next;
@@ -279,11 +306,15 @@ async function main() {
 
   const menu = createMenu({
     onPlay: () => startGame(),
-    // resume entry point: ticket #16's autosave plugs in here
-    onContinue: undefined,
+    // Resumes the latest stored snapshot; a stale tap after a finished game is a no-op.
+    onContinue: () => {
+      const saved = progress.match;
+      if (saved !== null) startGame(undefined, saved.snapshot);
+    },
     onHowto: () => openHowto(0),
     onSettings: openSettings,
   });
+  menu.setContinueVisible(progress.match !== null);
 
   const pauseDialog = createDialog({ title: '', actions: [ { label: '', onTap: () => {} } ] });
   pauseDialog.group.onEscape = closePause;
@@ -308,6 +339,10 @@ async function main() {
   table.layout(app.screen.width, app.screen.height);
 
   bindLifecycle(window, () => document.hidden, { setPaused: (paused) => platform.setPaused(paused) });
+  // A hidden tab may never come back: commit the pending turn now.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) autosave.flush();
+  });
   document.addEventListener('contextmenu', (event) => event.preventDefault());
 
   // The menu is on screen and accepts pointer input, so the game is playable.
