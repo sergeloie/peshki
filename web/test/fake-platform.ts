@@ -13,6 +13,9 @@ export function createFakePlatform() {
     setPaused: (paused) => {
       calls.push(`setPaused:${paused}`);
     },
+    setGameplayActive: (active) => {
+      calls.push(`setGameplayActive:${active}`);
+    },
     saveProgress: async () => {
       calls.push('saveProgress');
     },
