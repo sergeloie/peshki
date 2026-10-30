@@ -38,7 +38,6 @@ export class Game {
   /** -1 until somebody wins; a finished game with -1 is a draw. */
   winnerPlayerIndex = -1;
   private killedThisTurn = false;
-  private extraRollUsed = false;
   private readonly random: () => number;
 
   constructor(options: GameOptions = {}) {
@@ -63,6 +62,8 @@ export class Game {
     if (this.gameOver) return [rejected('game is over')];
     if (this.remainingDice.length > 0) return [rejected('unspent dice remain')];
 
+    // Every cycle judges its own dice and its own kills (RULES.MD §10.1, §10.3).
+    this.killedThisTurn = false;
     const values = Array.from({ length: this.config.numberOfDice }, () =>
       Math.floor(this.random() * this.config.numberOfSidesOnDice) + 1,
     );
@@ -145,15 +146,14 @@ export class Game {
     return [{ type: 'gameWon', playerIndex: this.winnerPlayerIndex }];
   }
 
-  /** Spends the rest of the roll: one extra roll for the same seat, or the turn ends. */
+  /** Spends the rest of the roll: an extra roll for the same seat, or the turn ends. */
   private endCycle(): GameEvent[] {
     this.remainingDice.splice(0, this.remainingDice.length);
     this.turnNumber += 1;
 
-    if (!this.extraRollUsed && grantsExtraTurn(this.rolledDice, this.killedThisTurn)) {
-      this.extraRollUsed = true;
-      return [];
-    }
+    // A fresh roll cycle may grant its own extra roll, so a six on the bonus
+    // roll chains (RULES.MD §10.1); only the two conditions in one cycle do not stack.
+    if (grantsExtraTurn(this.rolledDice, this.killedThisTurn)) return [];
 
     const events: GameEvent[] = [{ type: 'turnEnded', playerIndex: this.playerIndex }];
     if (this.turnNumber >= this.config.maxTurns) {
@@ -162,7 +162,6 @@ export class Game {
       return events;
     }
 
-    this.extraRollUsed = false;
     this.killedThisTurn = false;
     this.playerIndex = (this.playerIndex + 1) % this.config.numberOfPlayers;
     return events;

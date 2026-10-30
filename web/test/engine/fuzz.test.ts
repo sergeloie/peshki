@@ -19,7 +19,6 @@ function playGame(seed: number): void {
   const random = seededRandom(seed);
   const game = new Game({ random });
   const history: string[] = [];
-  let rollsThisTurn = 0;
 
   try {
     for (let action = 0; action < MAX_ACTIONS && !game.gameOver; action += 1) {
@@ -27,10 +26,8 @@ function playGame(seed: number): void {
 
       game.rollDice();
       const dice = [...game.rolledDice];
-      rollsThisTurn += 1;
       history.push(`P${seat} rolls ${dice.join('+')}`);
       auditBoard(game, history.at(-1) ?? '');
-      if (rollsThisTurn > 2) fail('more than one extra roll in a turn');
 
       let killed = false;
       while (!game.gameOver && game.playerIndex === seat && game.remainingDice.length > 0) {
@@ -54,12 +51,11 @@ function playGame(seed: number): void {
 
       if (game.gameOver) break;
       if (game.playerIndex === seat) {
-        // The seat keeps the turn only for a granted extra roll (§10.3).
+        // A seat keeps the turn only for a six or a kill in this very cycle (§10.3).
         if (!(killed || dice.includes(6))) fail('extra roll without a six or a kill');
       } else {
         // §10.4: the next seat is the next index, wrapping to zero.
         if (game.playerIndex !== (seat + 1) % game.config.numberOfPlayers) fail('turn order is not ascending');
-        rollsThisTurn = 0;
       }
     }
     if (!game.gameOver) fail(`the game did not finish in ${MAX_ACTIONS} actions`);

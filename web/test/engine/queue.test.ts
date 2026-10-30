@@ -23,17 +23,19 @@ describe('RULES.MD §16 dice and queue', () => {
     expect(game.rollDice()).toEqual([{ type: 'diceRolled', playerIndex: 0, values: [1, 2] }]);
   });
 
-  it('item 15: the extra roll is one only, a second six ends the turn', () => {
+  it('item 15: a six on the bonus roll chains another roll for the same seat', () => {
     const game = setupGame({ rolls: [[6, 6], [6, 6]], pawns: HOME_AND_TAIL });
     game.rollDice();
 
     const events = game.rollDice();
 
-    expect(eventTypes(events)).toEqual(['diceRolled', 'turnEnded']);
-    expect(game.playerIndex).toBe(1);
+    expect(eventTypes(events)).toEqual(['diceRolled']);
+    expect(game.playerIndex).toBe(0);
+    expect(game.turnNumber).toBe(2);
+    expect(game.remainingDice).toEqual([]);
   });
 
-  it('item 16: a kill without a six grants exactly one extra roll', () => {
+  it('item 16: a kill without a six grants an extra roll', () => {
     const game = setupGame({
       rolls: [[2, 3], [1, 1]],
       pawns: [
@@ -51,15 +53,11 @@ describe('RULES.MD §16 dice and queue', () => {
     const walkEvents = game.apply(walk);
     expect(eventTypes(walkEvents)).not.toContain('turnEnded');
     expect(game.playerIndex).toBe(0);
-
-    game.rollDice();
-    expect(eventTypes(spendAll(game))).toContain('turnEnded');
-    expect(game.playerIndex).toBe(1);
   });
 
-  it('item 16: a six plus a kill is still one extra roll, never two', () => {
+  it('item 16: a six and a kill in one cycle grant one bonus roll, not two', () => {
     const game = setupGame({
-      rolls: [[6, 2], [6, 6]],
+      rolls: [[6, 2], [1, 2]],
       pawns: [
         { player: 0, pawn: 0, cell: 3 },
         { player: 1, pawn: 0, cell: 5 },
@@ -71,13 +69,34 @@ describe('RULES.MD §16 dice and queue', () => {
     expect(eventTypes(game.apply(kill))).toContain('pawnKilled');
     const six = game.legalMoves().find((move): move is StepMove => move.kind === 'step' && move.steps === 6)!;
     expect(eventTypes(game.apply(six))).not.toContain('turnEnded');
+
+    // One bonus roll, not two: a single completed cycle and an empty dice ledger.
     expect(game.playerIndex).toBe(0);
+    expect(game.turnNumber).toBe(1);
+    expect(game.remainingDice).toEqual([]);
 
     game.rollDice();
-    const first = game.legalMoves().find((move): move is StepMove => move.kind === 'step' && move.steps === 6)!;
-    game.apply(first);
-    const second = game.legalMoves().find((move): move is StepMove => move.kind === 'step' && move.steps === 6)!;
-    expect(eventTypes(game.apply(second))).toContain('turnEnded');
+    expect(eventTypes(spendAll(game))).toContain('turnEnded');
+    expect(game.playerIndex).toBe(1);
+    expect(game.turnNumber).toBe(2);
+  });
+
+  it('a clean cycle ends the turn even after a cycle with a kill', () => {
+    const game = setupGame({
+      rolls: [[2, 3], [1, 2]],
+      pawns: [
+        { player: 0, pawn: 0, cell: 3 },
+        { player: 1, pawn: 0, cell: 5 },
+      ],
+    });
+    game.rollDice();
+    const kill = game.legalMoves().find((move): move is StepMove => move.kind === 'step' && move.steps === 2)!;
+    game.apply(kill);
+    const walk = game.legalMoves().find((move): move is StepMove => move.kind === 'step' && move.steps === 3)!;
+    expect(eventTypes(game.apply(walk))).not.toContain('turnEnded');
+
+    game.rollDice();
+    expect(eventTypes(spendAll(game))).toContain('turnEnded');
     expect(game.playerIndex).toBe(1);
   });
 
