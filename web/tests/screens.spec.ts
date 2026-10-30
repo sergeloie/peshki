@@ -227,14 +227,13 @@ test.describe('ticket #7 screens and i18n evidence', () => {
 
   for (const lang of SCREEN7_LANGS) {
     for (const viewport of SCREEN7_VIEWPORTS) {
-      test(
-        `screens: ${lang} ${viewport.name} ${viewport.width}x${viewport.height}`,
-        { timeout: 240_000 },
-        async () => {
-        const browser7 = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] });
-        const page = await browser7.newPage({ viewport, deviceScaleFactor: 1 });
-        mkdirSync(SHOT_DIR, { recursive: true });
-        for (const state of SCREEN7_STATES) {
+      // two chunks per viewport: one browser slow-boots SwiftShader per page,
+      // a 320 s ceiling per test keeps a wedged state from eating the battery
+      SCREEN7_STATES.forEach((state, index) => {
+        test(`screens: ${lang} ${viewport.name} ${index + 1}/${SCREEN7_STATES.length} ${state.name}`, async () => {
+          const browser7 = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] });
+          const page = await browser7.newPage({ viewport, deviceScaleFactor: 1 });
+          mkdirSync(SHOT_DIR, { recursive: true });
           await page.goto(`http://localhost:5173/?lang=${lang}${state.suffix}`);
           await page.waitForSelector('canvas');
           // dialogs slide in at 1.2 s (result) / 1.5 s (pause, howto, settings); bots animate meanwhile
@@ -243,10 +242,9 @@ test.describe('ticket #7 screens and i18n evidence', () => {
             path: resolve(SHOT_DIR, `screens-${state.name}-${lang}-${viewport.name}.png`),
             timeout: 55_000,
           });
-        }
-        await dropBrowser();
-        },
-      );
+          await dropBrowser();
+        });
+      });
     }
   }
 });

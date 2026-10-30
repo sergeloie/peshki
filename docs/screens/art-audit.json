@@ -16,35 +16,35 @@
     "artBytes": 216412,
     "artBudgetBytes": 3000000,
     "artBudgetPass": true,
-    "totalRequestBytes": 7888221,
+    "totalRequestBytes": 7888736,
     "topResources": [
       {
-        "resource": "pixi__js.js?v=19d8aa4e",
+        "resource": "pixi__js.js?v=5641b780",
         "bytes": 3790180,
         "art": false
       },
       {
-        "resource": "CanvasPool-CKBgjVg_.js?v=c2cc1907",
+        "resource": "CanvasPool-CKBgjVg_.js?v=5641b780",
         "bytes": 718477,
         "art": false
       },
       {
-        "resource": "GraphicsContext-DbBaCOsL.js?v=c2cc1907",
+        "resource": "GraphicsContext-DbBaCOsL.js?v=5641b780",
         "bytes": 672281,
         "art": false
       },
       {
-        "resource": "RenderTargetSystem-BdFca6T7.js?v=c2cc1907",
+        "resource": "RenderTargetSystem-BdFca6T7.js?v=5641b780",
         "bytes": 435903,
         "art": false
       },
       {
-        "resource": "Filter-CteG7TAT.js?v=c2cc1907",
+        "resource": "Filter-CteG7TAT.js?v=5641b780",
         "bytes": 390437,
         "art": false
       },
       {
-        "resource": "FederatedEventTarget-jrCASupg.js?v=c2cc1907",
+        "resource": "FederatedEventTarget-jrCASupg.js?v=5641b780",
         "bytes": 318711,
         "art": false
       }
