@@ -19,5 +19,7 @@ export { hasWon } from './win';
 export { grantsExtraTurn } from './turn-policy';
 export { firstLegalMove } from './selectors';
 export type { MoveSelector } from './selectors';
+export { createBot, DIFFICULTIES, DIFFICULTY_INFO } from './bot';
+export type { BotOptions, Difficulty } from './bot';
 export { snapshot, toJson, fromJson, fromSave, cellCoordinates } from './save';
 export type { SavedGame, SavedPlayer, SavedPawn, SavedCell } from './save';

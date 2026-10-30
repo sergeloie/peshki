@@ -125,7 +125,7 @@ export class Game {
         events.push(...this.pass());
         continue;
       }
-      events.push(...this.apply(selector(legal) ?? legal[0]));
+      events.push(...this.apply(selector(legal, { dice: [...this.remainingDice] }) ?? legal[0]));
     }
     return events;
   }

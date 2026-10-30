@@ -1,7 +1,8 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import type { FederatedPointerEvent } from 'pixi.js';
-import { Game, firstLegalMove, seededRandom } from '../engine';
-import type { Move, PawnRef } from '../engine';
+import { Game, createBot, seededRandom } from '../engine';
+import type { Difficulty, Move, PawnRef } from '../engine';
+import { HANDOVER_MS, decisionDelay } from '../game/pacing';
 import { createBoardGeometry } from '../render/board-geometry';
 import { createBoardView } from '../render/board-view';
 import { createPawnViews } from '../render/pawns';
@@ -14,11 +15,17 @@ export interface GameScreen {
 }
 
 export interface GameScreenOptions {
+  /** Bot level chosen by progression before this game started. */
+  difficulty: Difficulty;
   onGameOver?(): void;
 }
 
-export function createGameScreen(options: GameScreenOptions = {}): GameScreen {
+const BOT_NAMES = ['Оскар', 'Нина', 'Гектор'];
+
+export function createGameScreen(options: GameScreenOptions): GameScreen {
   const game = new Game({ random: seededRandom(Date.now() >>> 0) });
+  const botRandom = seededRandom((Date.now() ^ 0x9e3779b9) >>> 0);
+  const bot = createBot(game.board, options.difficulty, { random: botRandom });
   let geometry = createBoardGeometry(1, 1);
   let finished = false;
 
@@ -33,6 +40,8 @@ export function createGameScreen(options: GameScreenOptions = {}): GameScreen {
   let selected: PawnRef | null = null;
   let pending: Move[] = [];
   let busy = false;
+  let thinking = false;
+  let noMoves = false;
 
   root.on('pointertap', (event: FederatedPointerEvent) => {
     if (busy || game.gameOver) return;
@@ -64,10 +73,15 @@ export function createGameScreen(options: GameScreenOptions = {}): GameScreen {
 
     selected = null;
     selection.clear();
-    driveBots();
-    pending = game.legalMoves();
-    boardView.highlight(pending.map((move) => move.targetCellIndex));
-    refreshHud();
+    const ended = events.some((event) => event.type === 'turnEnded' || event.type === 'gameWon' || event.type === 'gameDrawn');
+    if (!ended) {
+      pending = game.legalMoves();
+      boardView.highlight(pending.map((move) => move.targetCellIndex));
+      refreshHud();
+      return;
+    }
+    // A roll that ends the turn had no legal move to play: say so before the hand-over.
+    void handOverFromHuman(events.some((event) => event.type === 'turnEnded'));
   }
 
   function onSum(): void {
@@ -87,6 +101,24 @@ export function createGameScreen(options: GameScreenOptions = {}): GameScreen {
 
   async function play(move: Move): Promise<void> {
     if (busy || game.gameOver) return;
+    busy = true;
+    selected = null;
+    pending = [];
+    selection.clear();
+    boardView.highlight([]);
+    refreshHud();
+
+    await performMove(move);
+    if (!game.gameOver && !game.isHuman(game.playerIndex)) {
+      await botTurn();
+      return;
+    }
+    busy = false;
+    settle();
+  }
+
+  /** Applies one move and animates it on its own; the caller owns `busy`. */
+  async function performMove(move: Move): Promise<void> {
     const path =
       move.kind === 'step'
         ? game.board.stepPath(move.playerIndex, move.pawnIndex, move.steps)
@@ -96,16 +128,7 @@ export function createGameScreen(options: GameScreenOptions = {}): GameScreen {
     if (move.kind === 'step' && path === null) return;
 
     const events = game.apply(move);
-    if (events.some((event) => event.type === 'moveRejected')) {
-      refreshHud();
-      return;
-    }
-
-    busy = true;
-    selected = null;
-    pending = [];
-    selection.clear();
-    boardView.highlight([]);
+    if (events.some((event) => event.type === 'moveRejected')) return;
     refreshHud();
 
     const sprite = pawnViews.sprite(move.playerIndex, move.pawnIndex);
@@ -149,18 +172,94 @@ export function createGameScreen(options: GameScreenOptions = {}): GameScreen {
     }
 
     pawnViews.sync();
-    driveBots();
-    pending = game.gameOver ? [] : game.legalMoves();
-    busy = false;
-    boardView.highlight(pending.map((candidate) => candidate.targetCellIndex));
-    refreshHud();
   }
 
-  /** Every seat that is not the human plays itself: placeholder first-legal-move (#5). */
-  function driveBots(): void {
-    while (!game.gameOver && !game.isHuman(game.playerIndex)) game.playSeatTurn(firstLegalMove);
-    pawnViews.sync();
-    if (game.gameOver) finishGame();
+  /**
+   * Drives every non-human seat: one readable beat per decision, one animation per
+   * move. `busy` stays true for the whole sequence, so a tap cannot leak into the
+   * next seat or a stale dice list.
+   */
+  async function botTurn(): Promise<void> {
+    busy = true;
+    let changedSeat = false;
+    while (!game.gameOver && !game.isHuman(game.playerIndex)) {
+      const seat = game.playerIndex;
+
+      if (game.remainingDice.length === 0) {
+        thinking = true;
+        refreshHud();
+        await sleep(decisionDelay(botRandom));
+        thinking = false;
+        if (game.gameOver || game.playerIndex !== seat) break;
+        const rolled = game.rollDice();
+        refreshHud();
+        if (rolled.some((event) => event.type === 'turnEnded')) {
+          noMoves = true;
+          refreshHud();
+          await sleep(HANDOVER_MS);
+          noMoves = false;
+          refreshHud();
+        }
+        if (game.playerIndex !== seat) changedSeat = true;
+        continue;
+      }
+
+      const legal = game.legalMoves();
+      if (legal.length === 0) {
+        game.pass();
+        continue;
+      }
+
+      thinking = true;
+      refreshHud();
+      await sleep(decisionDelay(botRandom));
+      thinking = false;
+      if (game.gameOver || game.playerIndex !== seat) break;
+
+      const move = bot(legal, { dice: [...game.remainingDice] });
+      if (move === null) break;
+      await performMove(move);
+      refreshHud();
+      if (game.playerIndex !== seat) changedSeat = true;
+    }
+
+    // Keep the hand-over on screen for a beat, still locked.
+    if (changedSeat && !game.gameOver && game.isHuman(game.playerIndex)) await sleep(HANDOVER_MS);
+    busy = false;
+    settle();
+  }
+
+  async function handOverFromHuman(turnEnded: boolean): Promise<void> {
+    busy = true;
+    if (turnEnded) {
+      noMoves = true;
+      refreshHud();
+      await sleep(HANDOVER_MS);
+      noMoves = false;
+    }
+    if (game.gameOver) {
+      busy = false;
+      settle();
+      return;
+    }
+    if (!game.isHuman(game.playerIndex)) {
+      await botTurn();
+      return;
+    }
+    busy = false;
+    settle();
+  }
+
+  function settle(): void {
+    if (game.gameOver) {
+      pending = [];
+      boardView.highlight([]);
+      finishGame();
+    } else {
+      pending = game.legalMoves();
+      boardView.highlight(pending.map((move) => move.targetCellIndex));
+    }
+    refreshHud();
   }
 
   function finishGame(): void {
@@ -210,8 +309,16 @@ export function createGameScreen(options: GameScreenOptions = {}): GameScreen {
         sumMoves.length > 0 && game.rolledDice.length === 2
           ? `${game.rolledDice[0] + game.rolledDice[1]} = ${game.rolledDice[0]} + ${game.rolledDice[1]}`
           : null,
-      message: resultMessage(game),
+      turn: seatLabel(game.playerIndex),
+      message: resultMessage(game) ?? stateMessage(),
     });
+  }
+
+  function stateMessage(): string | null {
+    if (noMoves) return 'Нет доступных ходов';
+    if (thinking) return `${seatLabel(game.playerIndex)} думает…`;
+    if (game.isHuman(game.playerIndex)) return game.remainingDice.length > 0 ? 'Ваш ход' : 'Ваш ход — бросайте';
+    return `${seatLabel(game.playerIndex)}: ход`;
   }
 
   return {
@@ -229,6 +336,11 @@ export function createGameScreen(options: GameScreenOptions = {}): GameScreen {
   };
 }
 
+function seatLabel(playerIndex: number): string {
+  if (playerIndex === 0) return 'Вы';
+  return BOT_NAMES[playerIndex - 1] ?? `Игрок ${playerIndex + 1}`;
+}
+
 function sumMovesFor(game: Game): Move[] {
   if (game.remainingDice.length !== 2 || game.rolledDice.length !== 2) return [];
   return game.legalMoves().filter((move) => move.kind === 'step' && move.consumedDice.length === 2);
@@ -239,6 +351,12 @@ function resultMessage(game: Game): string | null {
   if (!game.gameOver) return null;
   if (game.result === 'draw') return `Ничья: лимит ${game.config.maxTurns} ходов`;
   return `Победил игрок ${game.winnerPlayerIndex + 1}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function animate(duration: number, onUpdate: (t: number) => void): Promise<void> {

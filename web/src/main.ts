@@ -1,4 +1,5 @@
 import { createFlow } from './game/flow';
+import { effectiveDifficulty, loadGameProgress, recordCompletedGame } from './game/progress';
 import { bindLifecycle } from './platform/lifecycle';
 import { createPlatform } from './platform/ysdk';
 import { createRenderer } from './render/app';
@@ -11,6 +12,7 @@ const TITLE = 'Пешки';
 async function main() {
   const platform = createPlatform();
   await platform.boot();
+  let progress = await loadGameProgress(platform);
 
   const app = await createRenderer();
   let screen: GameScreen | null = null;
@@ -18,7 +20,17 @@ async function main() {
     title: TITLE,
     onPlay: () => {
       app.stage.removeChild(menu.root);
-      screen = createGameScreen({ onGameOver: () => platform.setGameplayActive(false) });
+      screen = createGameScreen({
+        difficulty: effectiveDifficulty(progress),
+        onGameOver: () => {
+          platform.setGameplayActive(false);
+          void recordCompletedGame(platform, progress)
+            .then((next) => {
+              progress = next;
+            })
+            .catch((error) => console.warn('[progress] save failed', error));
+        },
+      });
       app.stage.addChild(screen.root);
       screen.layout(app.screen.width, app.screen.height);
       platform.setGameplayActive(true);

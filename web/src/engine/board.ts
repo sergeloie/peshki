@@ -12,13 +12,20 @@ export class Board {
   readonly config: GameConfig;
   readonly topology: BoardTopology;
   readonly cells: Cell[];
-  readonly position: Position;
+  position: Position;
 
   constructor(config: GameConfig = DEFAULT_CONFIG) {
     this.config = config;
     this.topology = new BoardTopology(config);
     this.cells = buildCells(config, this.topology);
     this.position = new Position(config, this.topology);
+  }
+
+  /** Copy for lookahead; the topology and cells are immutable, only the position moves. */
+  clone(): Board {
+    const copy = new Board(this.config);
+    copy.position = this.position.clone();
+    return copy;
   }
 
   cell(cellIndex: number): Cell {

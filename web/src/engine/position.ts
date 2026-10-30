@@ -13,13 +13,23 @@ export class Position {
   private readonly cell: number[][];
   private readonly moved: boolean[][];
 
-  constructor(config: GameConfig, private readonly topology: BoardTopology) {
+  constructor(private readonly config: GameConfig, private readonly topology: BoardTopology) {
     this.cell = Array.from({ length: config.numberOfPlayers }, () =>
       Array.from({ length: config.numberOfPawns }, () => BENCH_CELL),
     );
     this.moved = Array.from({ length: config.numberOfPlayers }, () =>
       Array.from({ length: config.numberOfPawns }, () => false),
     );
+  }
+
+  /** Copy for lookahead: the bot simulates moves without touching the live board. */
+  clone(): Position {
+    const copy = new Position(this.config, this.topology);
+    for (let playerIndex = 0; playerIndex < this.cell.length; playerIndex += 1) {
+      copy.cell[playerIndex] = [...this.cell[playerIndex]];
+      copy.moved[playerIndex] = [...this.moved[playerIndex]];
+    }
+    return copy;
   }
 
   cellOf(playerIndex: number, pawnIndex: number): number {
