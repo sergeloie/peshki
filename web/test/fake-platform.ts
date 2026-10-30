@@ -1,0 +1,34 @@
+import type { Platform } from '../src/platform/ysdk';
+
+export function createFakePlatform() {
+  const calls: string[] = [];
+
+  const platform: Platform = {
+    boot: async () => {
+      calls.push('boot');
+    },
+    ready: () => {
+      calls.push('ready');
+    },
+    setPaused: (paused) => {
+      calls.push(`setPaused:${paused}`);
+    },
+    saveProgress: async () => {
+      calls.push('saveProgress');
+    },
+    loadProgress: async () => null,
+    language: () => 'ru',
+    submitScore: async () => {
+      calls.push('submitScore');
+    },
+    showAdBreak: async () => {
+      calls.push('showAdBreak');
+    },
+    showRewarded: async () => {
+      calls.push('showRewarded');
+      return false;
+    },
+  };
+
+  return { platform, calls };
+}
