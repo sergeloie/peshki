@@ -5,4 +5,6 @@ export type GameEvent =
   | { type: 'pawnKilled'; killerPlayerIndex: number; killerPawnIndex: number; victimPlayerIndex: number; victimPawnIndex: number }
   | { type: 'enteredHome'; playerIndex: number; pawnIndex: number }
   | { type: 'turnEnded'; playerIndex: number }
+  | { type: 'gameWon'; playerIndex: number }
+  | { type: 'gameDrawn'; turnNumber: number }
   | { type: 'moveRejected'; reason: string };

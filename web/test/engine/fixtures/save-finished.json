@@ -1,0 +1,493 @@
+{
+  "config" : {
+    "sideLength" : 8,
+    "numberOfPlayers" : 4,
+    "numberOfPawns" : 4,
+    "numberOfDice" : 2,
+    "numberOfSidesOnDice" : 6,
+    "maxTurns" : 10000
+  },
+  "currentPlayerIndex" : 0,
+  "currentDice" : [ 2, 1 ],
+  "turnNumber" : 142,
+  "gameOver" : true,
+  "winnerPlayerIndex" : 0,
+  "players" : [ {
+    "playerIndex" : 0,
+    "color" : "RED",
+    "human" : true,
+    "pawns" : [ {
+      "pawnIndex" : 0,
+      "state" : "HOMER",
+      "stepsTraveled" : 1,
+      "cellIndex" : 30,
+      "progress" : 1002
+    }, {
+      "pawnIndex" : 1,
+      "state" : "HOMER",
+      "stepsTraveled" : 1,
+      "cellIndex" : 29,
+      "progress" : 1001
+    }, {
+      "pawnIndex" : 2,
+      "state" : "HOMER",
+      "stepsTraveled" : 1,
+      "cellIndex" : 28,
+      "progress" : 1000
+    }, {
+      "pawnIndex" : 3,
+      "state" : "FIELDER",
+      "stepsTraveled" : 1,
+      "cellIndex" : 0,
+      "progress" : 27
+    } ]
+  }, {
+    "playerIndex" : 1,
+    "color" : "GREEN",
+    "human" : false,
+    "pawns" : [ {
+      "pawnIndex" : 0,
+      "state" : "HOMER",
+      "stepsTraveled" : 1,
+      "cellIndex" : 33,
+      "progress" : 1002
+    }, {
+      "pawnIndex" : 1,
+      "state" : "HOMER",
+      "stepsTraveled" : 1,
+      "cellIndex" : 32,
+      "progress" : 1001
+    }, {
+      "pawnIndex" : 2,
+      "state" : "FIELDER",
+      "stepsTraveled" : 1,
+      "cellIndex" : 17,
+      "progress" : 9
+    }, {
+      "pawnIndex" : 3,
+      "state" : "BENCH",
+      "stepsTraveled" : 0,
+      "cellIndex" : -1,
+      "progress" : -2
+    } ]
+  }, {
+    "playerIndex" : 2,
+    "color" : "YELLOW",
+    "human" : false,
+    "pawns" : [ {
+      "pawnIndex" : 0,
+      "state" : "HOMER",
+      "stepsTraveled" : 1,
+      "cellIndex" : 36,
+      "progress" : 1002
+    }, {
+      "pawnIndex" : 1,
+      "state" : "BENCH",
+      "stepsTraveled" : 0,
+      "cellIndex" : -1,
+      "progress" : -2
+    }, {
+      "pawnIndex" : 2,
+      "state" : "BENCH",
+      "stepsTraveled" : 0,
+      "cellIndex" : -1,
+      "progress" : -2
+    }, {
+      "pawnIndex" : 3,
+      "state" : "BENCH",
+      "stepsTraveled" : 0,
+      "cellIndex" : -1,
+      "progress" : -2
+    } ]
+  }, {
+    "playerIndex" : 3,
+    "color" : "BLUE",
+    "human" : false,
+    "pawns" : [ {
+      "pawnIndex" : 0,
+      "state" : "HOMER",
+      "stepsTraveled" : 1,
+      "cellIndex" : 39,
+      "progress" : 1002
+    }, {
+      "pawnIndex" : 1,
+      "state" : "FIELDER",
+      "stepsTraveled" : 1,
+      "cellIndex" : 20,
+      "progress" : 26
+    }, {
+      "pawnIndex" : 2,
+      "state" : "BENCH",
+      "stepsTraveled" : 0,
+      "cellIndex" : -1,
+      "progress" : -2
+    }, {
+      "pawnIndex" : 3,
+      "state" : "BENCH",
+      "stepsTraveled" : 0,
+      "cellIndex" : -1,
+      "progress" : -2
+    } ]
+  } ],
+  "cells" : [ {
+    "index" : 0,
+    "x" : 0,
+    "y" : 0,
+    "type" : "CORNER",
+    "occupantPlayerIndex" : 0,
+    "occupantColor" : "RED",
+    "occupantPawnIndex" : 3,
+    "ownerPlayerIndex" : 0
+  }, {
+    "index" : 1,
+    "x" : 1,
+    "y" : 0,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 2,
+    "x" : 2,
+    "y" : 0,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 3,
+    "x" : 3,
+    "y" : 0,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 4,
+    "x" : 4,
+    "y" : 0,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 5,
+    "x" : 5,
+    "y" : 0,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 6,
+    "x" : 6,
+    "y" : 0,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 7,
+    "x" : 7,
+    "y" : 0,
+    "type" : "CORNER",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : 1
+  }, {
+    "index" : 8,
+    "x" : 7,
+    "y" : 1,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 9,
+    "x" : 7,
+    "y" : 2,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 10,
+    "x" : 7,
+    "y" : 3,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 11,
+    "x" : 7,
+    "y" : 4,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 12,
+    "x" : 7,
+    "y" : 5,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 13,
+    "x" : 7,
+    "y" : 6,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 14,
+    "x" : 7,
+    "y" : 7,
+    "type" : "CORNER",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : 2
+  }, {
+    "index" : 15,
+    "x" : 6,
+    "y" : 7,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 16,
+    "x" : 5,
+    "y" : 7,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 17,
+    "x" : 4,
+    "y" : 7,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : 1,
+    "occupantColor" : "GREEN",
+    "occupantPawnIndex" : 2,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 18,
+    "x" : 3,
+    "y" : 7,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 19,
+    "x" : 2,
+    "y" : 7,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 20,
+    "x" : 1,
+    "y" : 7,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : 3,
+    "occupantColor" : "BLUE",
+    "occupantPawnIndex" : 1,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 21,
+    "x" : 0,
+    "y" : 7,
+    "type" : "CORNER",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : 3
+  }, {
+    "index" : 22,
+    "x" : 0,
+    "y" : 6,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 23,
+    "x" : 0,
+    "y" : 5,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 24,
+    "x" : 0,
+    "y" : 4,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 25,
+    "x" : 0,
+    "y" : 3,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 26,
+    "x" : 0,
+    "y" : 2,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 27,
+    "x" : 0,
+    "y" : 1,
+    "type" : "FIELD",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : null
+  }, {
+    "index" : 28,
+    "x" : 1,
+    "y" : 1,
+    "type" : "HOME",
+    "occupantPlayerIndex" : 0,
+    "occupantColor" : "RED",
+    "occupantPawnIndex" : 2,
+    "ownerPlayerIndex" : 0
+  }, {
+    "index" : 29,
+    "x" : 2,
+    "y" : 2,
+    "type" : "HOME",
+    "occupantPlayerIndex" : 0,
+    "occupantColor" : "RED",
+    "occupantPawnIndex" : 1,
+    "ownerPlayerIndex" : 0
+  }, {
+    "index" : 30,
+    "x" : 3,
+    "y" : 3,
+    "type" : "HOME",
+    "occupantPlayerIndex" : 0,
+    "occupantColor" : "RED",
+    "occupantPawnIndex" : 0,
+    "ownerPlayerIndex" : 0
+  }, {
+    "index" : 31,
+    "x" : 6,
+    "y" : 1,
+    "type" : "HOME",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : 1
+  }, {
+    "index" : 32,
+    "x" : 5,
+    "y" : 2,
+    "type" : "HOME",
+    "occupantPlayerIndex" : 1,
+    "occupantColor" : "GREEN",
+    "occupantPawnIndex" : 1,
+    "ownerPlayerIndex" : 1
+  }, {
+    "index" : 33,
+    "x" : 4,
+    "y" : 3,
+    "type" : "HOME",
+    "occupantPlayerIndex" : 1,
+    "occupantColor" : "GREEN",
+    "occupantPawnIndex" : 0,
+    "ownerPlayerIndex" : 1
+  }, {
+    "index" : 34,
+    "x" : 6,
+    "y" : 6,
+    "type" : "HOME",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : 2
+  }, {
+    "index" : 35,
+    "x" : 5,
+    "y" : 5,
+    "type" : "HOME",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : 2
+  }, {
+    "index" : 36,
+    "x" : 4,
+    "y" : 4,
+    "type" : "HOME",
+    "occupantPlayerIndex" : 2,
+    "occupantColor" : "YELLOW",
+    "occupantPawnIndex" : 0,
+    "ownerPlayerIndex" : 2
+  }, {
+    "index" : 37,
+    "x" : 1,
+    "y" : 6,
+    "type" : "HOME",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : 3
+  }, {
+    "index" : 38,
+    "x" : 2,
+    "y" : 5,
+    "type" : "HOME",
+    "occupantPlayerIndex" : null,
+    "occupantColor" : null,
+    "occupantPawnIndex" : null,
+    "ownerPlayerIndex" : 3
+  }, {
+    "index" : 39,
+    "x" : 3,
+    "y" : 4,
+    "type" : "HOME",
+    "occupantPlayerIndex" : 3,
+    "occupantColor" : "BLUE",
+    "occupantPawnIndex" : 0,
+    "ownerPlayerIndex" : 3
+  } ]
+}
