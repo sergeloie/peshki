@@ -24,6 +24,10 @@ export interface GameScreenOptions {
   ticker: Ticker;
   /** Fixed seed keeps screenshots reproducible. */
   seed?: number;
+  /** Debug harness (art review #6): show only these board/table layers. */
+  visibleLayers?: ReadonlySet<string>;
+  /** Debug harness: expose world-bounds probe for the audit test. */
+  debug?: boolean;
   onGameOver?(): void;
 }
 
@@ -40,6 +44,11 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
   const boardView = createBoardView(geometry, textures);
   const pawnViews = createPawnViews(game.board, geometry, textures, boardView.pointOf);
   const hud = createHud(textures, { onRoll, onSum });
+  if (options.visibleLayers !== undefined) {
+    boardView.setLayerVisible(options.visibleLayers);
+    pawnViews.root.visible = options.visibleLayers.has('pawns');
+    hud.root.visible = options.visibleLayers.has('hud');
+  }
 
   const boardLayer = new Container();
   boardLayer.addChild(boardView.root, pawnViews.root);
@@ -385,6 +394,35 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
       pawnViews.layout(geometry);
       hud.layout(width, height, gameLayout);
       root.hitArea = new Rectangle(0, 0, width, height);
+      if (options.debug) {
+        // measured, not asserted: frame rects and pawn boxes in screen px
+        (window as unknown as Record<string, unknown>).__peshkiMeasure = () => {
+          const k = geometry.scale;
+          const pawnBoxes: Array<{ playerIndex: number; pawnIndex: number; x: number; y: number; w: number; h: number }> = [];
+          pawnViews.root.children.forEach((child, index) => {
+            const bounds = child.getLocalBounds();
+            pawnBoxes.push({
+              playerIndex: Math.floor(index / game.config.numberOfPawns),
+              pawnIndex: index % game.config.numberOfPawns,
+              x: boardLayer.x + child.x + bounds.minX * child.scale.x,
+              y: boardLayer.y + child.y + bounds.minY * child.scale.y,
+              w: (bounds.maxX - bounds.minX) * child.scale.x,
+              h: (bounds.maxY - bounds.minY) * child.scale.y,
+            });
+          });
+          return {
+            viewport: { width, height },
+            boardOuter: {
+              x: gameLayout.board.x + gameLayout.board.size / 2 - 640 * k,
+              y: gameLayout.board.y + gameLayout.board.size / 2 - 640 * k,
+              size: 1280 * k,
+            },
+            frameInnerHalf: 542 * k,
+            scale: k,
+            pawnBoxes,
+          };
+        };
+      }
       setSelection(null, game.isHuman(game.playerIndex) ? game.legalMoves() : []);
       refreshCorners();
       refreshHud();

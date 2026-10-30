@@ -65,6 +65,34 @@ test.describe('art pass evidence', () => {
     await dropBrowser();
   });
 
+  /** Art review #6: committed 2× crops as evidence, not assertions. */
+  test('detail crops: top-left quadrant and left bench', async () => {
+    const page = await freshGamePage(VIEWPORTS[1]);
+    const crops = [
+      { name: 'detail-topleft', x: 179, y: 89, w: 220, h: 220 }, // face corner → medallion
+      { name: 'detail-bench-left', x: 100, y: 240, w: 110, h: 220 }, // west bench + frame band
+    ];
+    for (const crop of crops) {
+      const dataUrl = await page.evaluate(
+        ({ x, y, w, h }) => {
+          const source = document.querySelector('canvas');
+          const out = document.createElement('canvas');
+          out.width = w * 2;
+          out.height = h * 2;
+          const ctx = out.getContext('2d');
+          if (ctx === null) return '';
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(source, x, y, w, h, 0, 0, w * 2, h * 2);
+          return out.toDataURL('image/png');
+        },
+        { x: crop.x, y: crop.y, w: crop.w, h: crop.h },
+      );
+      mkdirSync(SHOT_DIR, { recursive: true });
+      writeFileSync(resolve(SHOT_DIR, `${crop.name}.png`), Buffer.from(dataUrl.replace(/^data:image\/png;base64,/, ''), 'base64'));
+    }
+    await dropBrowser();
+  });
+
   /**
    * GPU-independent facts (acceptance #2/#3, minus the device 60 fps number that
    * ticket #8 owns on real hardware):

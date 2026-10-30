@@ -1,5 +1,5 @@
-import { Container, Graphics, Sprite, Text } from 'pixi.js';
-import { COLORS, PLAYERS, drawSymbol } from './palette';
+import { CanvasSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { COLORS, PLAYERS } from './palette';
 import { FONTS } from './fonts';
 import type { GameTextures } from './textures';
 import { STRINGS } from '../ui/strings';
@@ -115,11 +115,81 @@ export interface HudView {
 
 interface ChipView {
   playerIndex: number;
-  root: Container;
-  plate: Graphics;
-  symbol: Graphics;
-  name: Text;
-  count: Text;
+  sprite: Sprite;
+  pos: { x: number; y: number };
+  /** cached row content so update() re-bakes only when it changes */
+  baked: string;
+}
+
+/** landscape row height, portrait top-bar chip height (design px, ×TV pad). */
+const ROW_HEIGHT_LANDSCAPE = 56;
+const ROW_HEIGHT_PORTRAIT = 48;
+
+function chipRowCanvas(
+  look: (typeof PLAYERS)[number],
+  state: PlayerChipState | undefined,
+  plateWidth: number,
+  plateHeight: number,
+  withName: boolean,
+): HTMLCanvasElement {
+  const s = 2; // 2× supersample like the pawn art
+  const el = document.createElement('canvas');
+  el.width = plateWidth * s;
+  el.height = plateHeight * s;
+  const ctx = el.getContext('2d')!;
+  ctx.scale(s, s);
+
+  const active = state?.active ?? false;
+  ctx.beginPath();
+  ctx.roundRect(0.5, 0.5, plateWidth - 1, plateHeight - 1, plateHeight / 2);
+  ctx.fillStyle = active ? 'rgba(80,48,24,0.94)' : 'rgba(42,20,13,0.94)';
+  ctx.fill();
+  ctx.lineWidth = active ? 2.5 : 1;
+  ctx.strokeStyle = active ? 'rgba(201,162,39,0.95)' : 'rgba(201,162,39,0.45)';
+  ctx.stroke();
+
+  // engraved player symbol
+  const symbolX = 18;
+  const symbolSize = Math.min(16, plateHeight * 0.34);
+  const drawSymbol = (pass: 'dark' | 'light', dx: number, dy: number): void => {
+    ctx.fillStyle = pass === 'dark' ? hexaCss(look.color, 1) : hexaCss(look.light, 0.8);
+    ctx.strokeStyle = ctx.fillStyle;
+    const cx = symbolX + dx + symbolSize / 2;
+    const cy = plateHeight / 2 + dy;
+    const r = symbolSize / 2;
+    switch (look.symbol) {
+      case 'disc':
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); break;
+      case 'ring':
+        ctx.lineWidth = symbolSize * 0.22; ctx.beginPath(); ctx.arc(cx, cy, r * 0.8, 0, Math.PI * 2); ctx.stroke(); break;
+      case 'diamond':
+        ctx.beginPath(); ctx.moveTo(cx, cy - r * 1.4); ctx.lineTo(cx + r * 1.4, cy); ctx.lineTo(cx, cy + r * 1.4); ctx.lineTo(cx - r * 1.4, cy); ctx.closePath(); ctx.fill(); break;
+      case 'square':
+        ctx.fillRect(cx - r * 1.15, cy - r * 1.15, r * 2.3, r * 2.3); break;
+    }
+  };
+  drawSymbol('light', 0.8, 1.2);
+  drawSymbol('dark', 0, 0);
+
+  // §9: ivory text, PT Sans for the name, PT Mono for the counter
+  ctx.textBaseline = 'middle';
+  if (withName && state !== undefined) {
+    ctx.fillStyle = '#fff6e6';
+    ctx.font = `700 20px "PT Sans", sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText(state.name, 34, plateHeight / 2 - plateHeight * 0.02);
+  }
+  if (state !== undefined && state.benchCount > 0) {
+    ctx.fillStyle = '#f3d77b';
+    ctx.font = `20px "PT Mono", monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`x${state.benchCount}`, plateWidth - 12, plateHeight / 2 - plateHeight * 0.02);
+  }
+  return el;
+}
+
+function hexaCss(color: number, alpha: number): string {
+  return `rgba(${(color >> 16) & 0xff},${(color >> 8) & 0xff},${color & 0xff},${alpha})`;
 }
 
 export function createHud(textures: GameTextures, handlers: { onRoll(): void; onSum(): void }): HudView {
@@ -133,16 +203,10 @@ export function createHud(textures: GameTextures, handlers: { onRoll(): void; on
   const dicePulse = new Graphics();
 
   const chips: ChipView[] = PLAYERS.map((_, playerIndex) => {
-    const chip = new Container();
-    const plate = new Graphics();
-    const symbol = new Graphics();
-    const name = new Text({ text: '', style: { fill: 0xf2e8dc, fontFamily: FONTS.body, fontWeight: '700' } });
-    const count = new Text({ text: '', style: { fill: COLORS.brassLight, fontFamily: FONTS.mono } });
-    name.anchor.set(0, 0.5);
-    count.anchor.set(1, 0.5);
-    chip.addChild(plate, symbol, name, count);
-    root.addChild(chip);
-    return { root: chip, plate, symbol, name, count, playerIndex };
+    const sprite = new Sprite();
+    sprite.anchor.set(0.5, 0.5);
+    sprite.visible = false;
+    return { playerIndex, sprite, pos: { x: 0, y: 0 }, baked: '' };
   });
 
   const sumChip = new Container();
@@ -188,6 +252,8 @@ export function createHud(textures: GameTextures, handlers: { onRoll(): void; on
     sumChip,
     message,
     rollButton,
+    // player rows last: the panels must not cover the list or the top bar
+    ...chips.map((chip) => chip.sprite),
   );
 
   let geometry: GameLayout | null = null;
@@ -218,34 +284,32 @@ export function createHud(textures: GameTextures, handlers: { onRoll(): void; on
     return PLAYERS[playerIndex];
   }
 
-  function styleChip(chip: ChipView, state: PlayerChipState | undefined, rowHeight: number): void {
-    const pad = geometry?.isTv ? TV_PAD : 1;
-    const plateWidth = chipWidth();
-    const chipHeight = Math.round(rowHeight * pad);
+  /** Re-bake a player row onto its canvas texture when its content changed. */
+  function bakeChip(chip: ChipView, state: PlayerChipState | undefined, plateWidth: number, plateHeight: number): void {
+    chip.sprite.position.set(chip.pos.x, chip.pos.y);
+    const withName = geometry?.orientation !== 'portrait'; // §7.3 portrait chips carry no name
+    const key = [
+      chip.playerIndex,
+      state?.name ?? '',
+      state?.benchCount ?? -1,
+      state?.active ? 1 : 0,
+      Math.round(plateWidth),
+      Math.round(plateHeight),
+      withName ? 1 : 0,
+    ].join('|');
+    if (chip.baked === key) return;
+    chip.baked = key;
     const look = chipLook(chip.playerIndex);
-    chip.plate.clear();
-    chip.plate
-      .roundRect(-plateWidth / 2, -chipHeight / 2, plateWidth, chipHeight, chipHeight / 2)
-      .fill({ color: state?.active ? 0x503018 : COLORS.panel, alpha: 0.94 });
-    chip.plate
-      .roundRect(-plateWidth / 2, -chipHeight / 2, plateWidth, chipHeight, chipHeight / 2)
-      .stroke({
-        width: state?.active ? 2 : 1,
-        color: COLORS.brass,
-        alpha: state?.active ? 0.95 : 0.4, // §2 panels ≥ 4.5:1: the hairline keeps the row legible
-      });
-    chip.symbol.clear();
-    drawSymbol(chip.symbol, look.symbol, -plateWidth / 2 + 6 * pad + 12, 0, 15 * pad, look.color);
-    chip.name.style.fill = 0xfff3e0;
-    chip.name.position.set(-plateWidth / 2 + 30 * pad, 0);
-    if (state === undefined) {
-      chip.root.visible = false;
-      return;
-    }
-    chip.root.visible = true;
-    chip.count.style.fill = COLORS.brassLight;
-    chip.count.text = state.benchCount > 0 ? `x${state.benchCount}` : '';
-    chip.count.position.set(plateWidth / 2 - 12 * pad, 0);
+    const texture = new Texture({
+      source: new CanvasSource({
+        resource: chipRowCanvas(look, state, plateWidth, plateHeight, withName),
+        resolution: 2,
+      }),
+    });
+    chip.sprite.texture = texture;
+    chip.sprite.width = plateWidth;
+    chip.sprite.height = plateHeight;
+    chip.sprite.visible = state !== undefined;
   }
 
 /** Chip width is decided by orientation; the single source for plates and positions. */
@@ -281,9 +345,14 @@ function strokeArc(
     const { x, y, size } = die;
     const k = size / 96;
     const radius = 18 * k;
-    diceLayer
-      .roundRect(x, y, size, size, radius)
-      .fill({ color: 0xf2ead8, alpha: idle ? 0.55 : unspent ? 1 : 0.45 });
+    // porcelain stays porcelain while resting (art review #6): full material,
+    // muted pips, brass rim — never the spent putty-grey
+    diceLayer.roundRect(x, y, size, size, radius).fill({ color: 0xf2ead8, alpha: idle ? 0.92 : unspent ? 1 : 0.45 });
+    if (idle) {
+      diceLayer
+        .roundRect(x, y, size, size, radius)
+        .stroke({ width: 2 * k, color: COLORS.brass, alpha: 0.55 });
+    }
     // §3 height-fall: lit top edge, dark lower edge
     diceLayer
       .moveTo(x + radius * 0.8, y + 1.6 * k)
@@ -300,9 +369,9 @@ function strokeArc(
     const cx = x + size / 2;
     const cy = y + size / 2;
     for (const [dx, dy] of PIP_POSITIONS[value] ?? []) {
-      diceLayer.circle(cx + dx * offset, cy + dy * offset, pipRadius).fill(pipColor);
-      // light bevel on top of every pip (§6); arc re-seeded from moveTo, v8
-      // connects the current path point to a new arc otherwise
+      diceLayer.circle(cx + dx * offset, cy + dy * offset, pipRadius).fill({ color: pipColor, alpha: idle ? 0.66 : 1 });
+      // light bevel on top of every pip (§6); v8 connects the current path
+      // point to a new arc otherwise
       strokeArc(
         diceLayer,
         cx + dx * offset,
@@ -310,7 +379,7 @@ function strokeArc(
         pipRadius * 0.86,
         Math.PI * 1.25,
         Math.PI * 1.85,
-        { width: 2 * k, color: 0xffffff, alpha: idle ? 0.18 : unspent ? 0.4 : 0.18 },
+        { width: 2 * k, color: 0xffffff, alpha: idle ? 0.3 : unspent ? 0.4 : 0.18 },
       );
     }
 
@@ -338,12 +407,14 @@ function strokeArc(
       diceShadows.removeChildren();
       dicePulse.clear();
 
+      /* FONT sizes travel with the breakpoint (board table only)
       chips.forEach((chip) => {
-        chip.name.style.fontSize = baseFont - 1;
-        chip.count.style.fontSize = baseFont - 2;
-      });
+        const scaleUp = geometry?.orientation === 'portrait' ? 0 : 3;
+        chip.name.style.fontSize = baseFont + scaleUp;
+        chip.count.style.fontSize = baseFont + scaleUp;
+      }); */
       rollLabel.style.fontSize = Math.round(baseFont * 1.25);
-      message.style.fontSize = baseFont;
+      message.style.fontSize = baseFont + 1;
       sumLabel.style.fontSize = Math.round(baseFont * 1.05);
 
       const diceSize = Math.round((orientation === 'portrait' ? 96 : 88) * pad);
@@ -397,10 +468,10 @@ function strokeArc(
         // player list fills the rest at phone-readable row height (56 * pad)
         const rowHeight = 56 * pad;
         chips.forEach((chip, index) => {
-          chip.root.position.set(
-            panelX + 14 * pad + chipWidth() / 2,
-            height - 24 * pad - rowHeight / 2 - (chips.length - 1 - index) * (rowHeight + 10 * pad),
-          );
+          chip.pos = {
+            x: panelX + 14 * pad + chipWidth() / 2,
+            y: height - 24 * pad - rowHeight / 2 - (chips.length - 1 - index) * (rowHeight + 10 * pad),
+          };
         });
       }
 
@@ -408,10 +479,10 @@ function strokeArc(
         const cw = chipWidth();
         const totalRow = cw * 4 + 3 * 10 * pad;
         chips.forEach((chip, index) => {
-          chip.root.position.set(
-            (width - totalRow) / 2 + cw / 2 + index * (cw + 10 * pad),
-            Math.round(36 * pad), // centred in the 72 * pad top bar
-          );
+          chip.pos = {
+            x: (width - totalRow) / 2 + cw / 2 + index * (cw + 10 * pad),
+            y: Math.round(36 * pad), // centred in the 72 * pad top bar
+          };
         });
       }
 
@@ -460,10 +531,14 @@ function strokeArc(
       message.visible = state.sumLabel === null && state.message !== null;
       if (message.visible) message.text = state.message as string;
 
+      // player rows are baked canvas textures; content changes re-bake one row
       for (const chip of chips) {
         const player = state.players[chip.playerIndex];
-        styleChip(chip, player, geometry?.orientation === 'portrait' ? 48 : 56);
-        if (player !== undefined) chip.name.text = player.name;
+        const pad = geometry?.isTv ? TV_PAD : 1;
+        const rowHeight = ((geometry?.orientation ?? 'portrait') === 'portrait'
+          ? ROW_HEIGHT_PORTRAIT
+          : ROW_HEIGHT_LANDSCAPE) * pad;
+        bakeChip(chip, player, chipWidth(), rowHeight);
       }
 
       rollButton.alpha = state.canRoll ? 1 : 0.45;

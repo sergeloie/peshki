@@ -12,19 +12,51 @@ export interface BoardView {
   highlight(cellIndices: number[], origin?: Point | null): void;
   /** §4: corner symbols stay engraved until the player's first pawn is placed. */
   setCornerOccupied(playerIndex: number, occupied: boolean): void;
+  /** Debug harness (art review #6): show only the named material layers. */
+  setLayerVisible(names: ReadonlySet<string>): void;
 }
 
-/** Corner pitch ring beyond the ring cells (§4: corner cells are 132 design px). */
+export const BOARD_LAYERS = [
+  'shadows',
+  'track',
+  'frame',
+  'cells',
+  'tails',
+  'benches',
+  'medallion',
+  'marks',
+  'highlights',
+] as const;
+
+/** Corner floor ledger beyond the ring cells (§4: corner cells are 132 design px). */
 const CORNER_EXTRA = 132 - RING_CELL_SIZE;
 
 export function createBoardView(initial: BoardGeometry, textures: GameTextures): BoardView {
   const root = new Container();
   const shadows = new Container();
-  const base = new Graphics();
+  // one Graphics per material: strokes never leak between fill accumulators and
+  // the debug harness can isolate any layer (art review, ticket #6)
+  const trackG = new Graphics();
+  const frameG = new Graphics();
+  const cellsG = new Graphics();
+  const tailsG = new Graphics();
+  const benchesG = new Graphics();
   const medallion = new Sprite({ texture: textures.medallion });
   const marks = new Graphics();
   const highlights = new Graphics();
-  root.addChild(shadows, base, medallion, marks, highlights);
+  root.addChild(shadows, frameG, trackG, cellsG, tailsG, benchesG, medallion, marks, highlights);
+
+  const layerOf: Record<(typeof BOARD_LAYERS)[number], Container> = {
+    shadows,
+    track: trackG,
+    frame: frameG,
+    cells: cellsG,
+    tails: tailsG,
+    benches: benchesG,
+    medallion,
+    marks,
+    highlights,
+  };
 
   let geometry = initial;
   let points = new Map<number, Point>();
@@ -34,7 +66,11 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
     geometry = next;
     points = new Map<number, Point>();
     shadows.removeChildren();
-    base.clear();
+    frameG.clear();
+    trackG.clear();
+    cellsG.clear();
+    tailsG.clear();
+    benchesG.clear();
     marks.clear();
     drawFrame();
     drawTrack();
@@ -47,72 +83,69 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
 
   /** Walnut frame with the §3 height-fall: bright top-left edge, dark bottom-right. */
   function drawFrame(): void {
-    const { center, scale } = geometry;
-    const k = scale;
+    const { center, scale: k } = geometry;
     const half = (BOARD_DESIGN_SIZE / 2) * k;
     const faceHalf = (BOARD_DESIGN_SIZE / 2 - 98) * k;
 
-    base.roundRect(center.x - half, center.y - half, half * 2, half * 2, 12 * k).fill(COLORS.frame);
-    base
+    frameG.roundRect(center.x - half, center.y - half, half * 2, half * 2, 12 * k).fill(COLORS.frame);
+    frameG
       .moveTo(center.x - half + 14 * k, center.y - half + 1.6 * k)
       .lineTo(center.x + half - 14 * k, center.y - half + 1.6 * k)
       .stroke({ width: 1.5 * k, color: COLORS.frameEdge, alpha: 0.9 });
-    base
+    frameG
       .moveTo(center.x - half + 1.6 * k, center.y - half + 14 * k)
       .lineTo(center.x - half + 1.6 * k, center.y + half - 14 * k)
       .stroke({ width: 1.5 * k, color: COLORS.frameEdge, alpha: 0.55 });
-    base
+    frameG
       .moveTo(center.x + half - 2.4 * k, center.y - half + 12 * k)
       .lineTo(center.x + half - 2.4 * k, center.y + half - 12 * k)
       .stroke({ width: 2 * k, color: COLORS.frameDeep, alpha: 0.9 });
-    base
+    frameG
       .moveTo(center.x - half + 12 * k, center.y + half - 2.4 * k)
       .lineTo(center.x + half - 12 * k, center.y + half - 2.4 * k)
       .stroke({ width: 2 * k, color: COLORS.frameDeep, alpha: 0.9 });
 
-    // cherry face, then the static radial aging from §2
-    base.roundRect(center.x - faceHalf, center.y - faceHalf, faceHalf * 2, faceHalf * 2, 8 * k).fill(COLORS.boardInner);
+    // cherry face under the cells
+    frameG.roundRect(center.x - faceHalf, center.y - faceHalf, faceHalf * 2, faceHalf * 2, 8 * k).fill(COLORS.boardInner);
   }
 
-  /** Continuous dark groove along the ring path (§4 «колея», width ~130 px with soft edges). */
+  /** Continuous dark groove along the ring path (§4 «колея»). */
   function drawTrack(): void {
-    const { center, scale } = geometry;
-    const R = 480 * scale;
-    const cx = center.x;
-    const cy = center.y;
+    const { center, scale: k } = geometry;
+    const R = 480 * k;
     const octagon: Point[] = [
-      { x: cx, y: cy - R },
-      { x: cx + R, y: cy - R },
-      { x: cx + R, y: cy },
-      { x: cx + R, y: cy + R },
-      { x: cx, y: cy + R },
-      { x: cx - R, y: cy + R },
-      { x: cx - R, y: cy },
-      { x: cx - R, y: cy - R },
+      { x: center.x, y: center.y - R },
+      { x: center.x + R, y: center.y - R },
+      { x: center.x + R, y: center.y },
+      { x: center.x + R, y: center.y + R },
+      { x: center.x, y: center.y + R },
+      { x: center.x - R, y: center.y + R },
+      { x: center.x - R, y: center.y },
+      { x: center.x - R, y: center.y - R },
     ];
-    strokePolygon(base, octagon, (RING_CELL_SIZE + 30) * scale, COLORS.track, 0.22);
-    strokePolygon(base, octagon, (RING_CELL_SIZE + 10) * scale, COLORS.track, 0.5);
-    strokePolygon(base, octagon, RING_CELL_SIZE * scale, COLORS.track, 1);
+    strokePolygon(trackG, octagon, (RING_CELL_SIZE + 30) * k, COLORS.track, 0.22);
+    strokePolygon(trackG, octagon, (RING_CELL_SIZE + 10) * k, COLORS.track, 0.5);
+    strokePolygon(trackG, octagon, RING_CELL_SIZE * k, COLORS.track, 1);
   }
 
   function drawCells(): void {
-    const { scale } = geometry;
+    const { scale: k } = geometry;
     for (const cell of geometry.ring) {
       points.set(cell.cellIndex, { x: cell.x, y: cell.y });
       addShadow(cell.x, cell.y, cell.size, 0.25);
       const look = cell.cornerPlayer === null ? null : PLAYERS[cell.cornerPlayer];
       drawTile(cell.x, cell.y, cell.size, look);
-      const extra = look ? CORNER_EXTRA * scale : 0;
+      const extra = look ? CORNER_EXTRA * k : 0;
       if (look) {
-        base
+        cellsG
           .roundRect(
             cell.x - cell.size / 2 - extra / 2,
             cell.y - cell.size / 2 - extra / 2,
             cell.size + extra,
             cell.size + extra,
-            12 * scale,
+            12 * k,
           )
-          .stroke({ width: 3 * scale, color: look.color, alpha: 0.95 });
+          .stroke({ width: 3 * k, color: look.color, alpha: 0.95 });
       }
     }
   }
@@ -123,35 +156,31 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
     const slab = look === null ? COLORS.cellDeep : mixColor(COLORS.cellDeep, look.color, 0.12);
     const face = look === null ? COLORS.cell : mixColor(COLORS.cell, look.color, 0.2);
 
-    base.roundRect(x - size / 2, y - size / 2 + 4 * k, size, size, 12 * k).fill(slab);
-    base
+    cellsG.roundRect(x - size / 2, y - size / 2 + 4 * k, size, size, 12 * k).fill(slab);
+    cellsG
       .moveTo(x - size / 2 + 9 * k, y + size / 2 + 3.4 * k)
       .lineTo(x + size / 2 - 9 * k, y + size / 2 + 3.4 * k)
       .stroke({ width: 1 * k, color: COLORS.cellLight, alpha: 0.75 });
-    base.roundRect(x - size / 2, y - size / 2 - 2 * k, size, size, 12 * k).fill(face);
-    // top-left bevel under the single key light
+    cellsG.roundRect(x - size / 2, y - size / 2 - 2 * k, size, size, 12 * k).fill(face);
+    // single top bevel under the key light — no left-edge stack: seven west
+    // cells side by side read as a bright wall along the face edge (art review)
     const r = 12 * k;
-    base
+    cellsG
       .moveTo(x - size / 2 + r, y - size / 2 - 2 * k + 1 * k)
       .lineTo(x + size / 2 - r * 0.55, y - size / 2 - 2 * k + 1 * k)
       .stroke({ width: 1.6 * k, color: COLORS.cellLight, alpha: 0.5 });
-    base
-      .moveTo(x - size / 2 + 1 * k, y - size / 2 - 2 * k + r)
-      .lineTo(x - size / 2 + 1 * k, y + size / 2 - 2 * k - r * 0.45)
-      .stroke({ width: 1.6 * k, color: COLORS.cellLight, alpha: 0.32 });
   }
 
   /**
    * §4 home tails: three separate porcelain steps per tail (104 → 96 → 88),
    * narrowing toward the centre, each capped inside the corner tile's inner
    * edge (design 414) and clear of the medallion (design 118) so the three
-   * cells read distinctly — no windmill, no arm crossing the ring.
+   * cells read distinctly.
    */
   function drawHomes(): void {
-    const { scale, center } = geometry;
-    const ringInner = 480 * scale;
-    const cellInner = ringInner - (RING_CELL_SIZE / 2 + 8) * scale; // design 414 scaled
-    const medallionEdge = (110 + 8) * scale; // design 118 scaled
+    const { scale: k, center } = geometry;
+    const cellInner = (480 - RING_CELL_SIZE / 2 - 8) * k; // design 414
+    const medallionEdge = (110 + 8) * k; // design 118
     for (const homes of geometry.homes) {
       const look = PLAYERS[homes[0].playerIndex];
       for (const home of homes) {
@@ -163,58 +192,53 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
         const s = home.size;
         const radiusOuter = Math.min(d + s * 0.4, cellInner);
         const radiusInner = Math.max(d - s * 0.4, medallionEdge);
-        const halfWidthOuter = s * 0.44; // tile runs ~88 % of the step size across
-        const halfWidthInner = s * 0.36;
         const at = (radius: number, halfWidth: number, sign: number): Point => ({
           x: center.x + u.x * radius + perp.x * halfWidth * sign,
           y: center.y + u.y * radius + perp.y * halfWidth * sign,
         });
         const poly: Point[] = [
-          at(radiusOuter, halfWidthOuter, 1),
-          at(radiusOuter, halfWidthOuter, -1),
-          at(radiusInner, halfWidthInner, -1),
-          at(radiusInner, halfWidthInner, 1),
+          at(radiusOuter, s * 0.44, 1),
+          at(radiusOuter, s * 0.44, -1),
+          at(radiusInner, s * 0.36, -1),
+          at(radiusInner, s * 0.36, 1),
         ];
-        base.poly(poly).fill(COLORS.ivory);
-        // brass rim in the player's colour (§4)
-        base.poly(poly).stroke({ width: 1.6 * scale, color: look.color, alpha: 0.9 });
+        tailsG.poly(poly).fill(COLORS.ivory);
+        tailsG.poly(poly).stroke({ width: 1.6 * k, color: look.color, alpha: 0.9 });
         // thickness on the outer edge away from the light, lit inner rim (§3)
-        base
+        tailsG
           .moveTo(poly[0].x, poly[0].y)
           .lineTo(poly[1].x, poly[1].y)
-          .stroke({ width: 2.6 * scale, color: COLORS.ivoryDeep, alpha: 0.6 });
-        base
+          .stroke({ width: 2.6 * k, color: COLORS.ivoryDeep, alpha: 0.6 });
+        tailsG
           .moveTo(poly[2].x, poly[2].y)
           .lineTo(poly[3].x, poly[3].y)
-          .stroke({ width: 1.4 * scale, color: COLORS.cellLight, alpha: 0.45 });
+          .stroke({ width: 1.4 * k, color: COLORS.cellLight, alpha: 0.45 });
       }
     }
   }
 
   function drawMedallion(): void {
-    const { center, scale } = geometry;
-    const diameter = 230 * scale;
+    const { center, scale: k } = geometry;
+    const diameter = 230 * k;
     medallion.width = diameter;
     medallion.height = diameter;
     medallion.position.set(center.x - diameter / 2, center.y - diameter / 2);
   }
 
-  /** §4 benches: four recessed holes with rim light; each arc re-seeded from moveTo. */
+  /** §4 benches: four recessed holes with rim light. */
   function drawBenchSlots(): void {
-    const { scale } = geometry;
+    const { scale: k } = geometry;
     for (const benches of geometry.benches) {
       for (const slot of benches) {
-        const r = 22 * scale;
-        base.circle(slot.x, slot.y, r).fill(COLORS.engraved);
-        // light rim where the key light reaches into the recess
-        strokeArc(base, slot.x, slot.y - 1 * scale, r * 0.8, Math.PI * 0.12, Math.PI * 0.55, {
-          width: 3 * scale,
+        const r = 22 * k;
+        benchesG.circle(slot.x, slot.y, r).fill(COLORS.engraved);
+        strokeArc(benchesG, slot.x, slot.y - 1 * k, r * 0.8, Math.PI * 0.12, Math.PI * 0.55, {
+          width: 3 * k,
           color: COLORS.cell,
           alpha: 0.75,
         });
-        // deep rim top-left, away from the light
-        strokeArc(base, slot.x, slot.y, r * 0.95, Math.PI * 0.9, Math.PI * 1.5, {
-          width: 2.4 * scale,
+        strokeArc(benchesG, slot.x, slot.y, r * 0.95, Math.PI * 0.9, Math.PI * 1.5, {
+          width: 2.4 * k,
           color: COLORS.frameDeep,
           alpha: 0.85,
         });
@@ -224,12 +248,11 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
 
   function drawCornerMarks(): void {
     marks.clear();
-    const { scale } = geometry;
+    const { scale: k } = geometry;
     geometry.corners.forEach((corner) => {
       if (occupiedCorners[corner.playerIndex]) return;
       const look = PLAYERS[corner.playerIndex];
-      // engraved plate: dark pass on top, light pass offset into the key light
-      drawSymbol(marks, look.symbol, corner.x + 1.4 * scale, corner.y + 2.2 * scale, corner.size * 0.44, look.light, 0.18);
+      drawSymbol(marks, look.symbol, corner.x + 1.4 * k, corner.y + 2.2 * k, corner.size * 0.44, look.light, 0.18);
       drawSymbol(marks, look.symbol, corner.x, corner.y, corner.size * 0.44, look.deep, 0.5);
     });
   }
@@ -257,18 +280,21 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
       occupiedCorners[playerIndex] = occupied;
       drawCornerMarks();
     },
+    setLayerVisible(names) {
+      for (const [name, layer] of Object.entries(layerOf)) layer.visible = names.has(name);
+    },
     highlight(cellIndices, origin = null) {
       highlights.clear();
-      const { scale } = geometry;
+      const { scale: k } = geometry;
       if (origin !== null) {
         for (const cellIndex of cellIndices) {
           const target = points.get(cellIndex);
           if (target === undefined) continue;
-          drawDottedLine(highlights, origin, target, 15 * scale, scale);
-          highlights.circle(target.x, target.y, 10 * scale).fill({ color: COLORS.brass, alpha: 0.95 });
+          drawDottedLine(highlights, origin, target, 15 * k, k);
+          highlights.circle(target.x, target.y, 10 * k).fill({ color: COLORS.brass, alpha: 0.95 });
           highlights
-            .circle(target.x, target.y, 10 * scale)
-            .stroke({ width: 2.5 * scale, color: COLORS.brassLight, alpha: 0.9 });
+            .circle(target.x, target.y, 10 * k)
+            .stroke({ width: 2.5 * k, color: COLORS.brassLight, alpha: 0.9 });
         }
         return;
       }
@@ -277,29 +303,29 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
         if (point === undefined) continue;
         highlights
           .circle(point.x, point.y, geometry.cellSize * 0.46)
-          .stroke({ width: 5 * scale, color: COLORS.brass, alpha: 0.85 });
-        highlights.circle(point.x, point.y, 7 * scale).fill(COLORS.brassLight);
+          .stroke({ width: 5 * k, color: COLORS.brass, alpha: 0.85 });
+        highlights.circle(point.x, point.y, 7 * k).fill(COLORS.brassLight);
       }
     },
   };
 }
 
-/** Dot-dash brass hint line (§7.3 «пунктирная латунная линия»). */
-function drawDottedLine(graphics: Graphics, from: Point, to: Point, dash: number, scale: number): void {
+/** §7.3 dotted brass hint line. */
+function drawDottedLine(graphics: Graphics, from: Point, to: Point, dash: number, k: number): void {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const length = Math.hypot(dx, dy);
   if (length < dash) return;
   const ux = dx / length;
   const uy = dy / length;
-  for (let d = length * 0.24; d < length - 8 * scale; d += dash) {
-    graphics.circle(from.x + ux * d, from.y + uy * d, 2.6 * scale).fill({ color: COLORS.brassLight, alpha: 0.85 });
+  for (let d = length * 0.24; d < length - 8 * k; d += dash) {
+    graphics.circle(from.x + ux * d, from.y + uy * d, 2.6 * k).fill({ color: COLORS.brassLight, alpha: 0.85 });
   }
 }
 
 /**
- * Arc stroke that cannot leak a connecting chord: Pixi v8 joins the current
- * path point to the next arc's start, so every arc is re-seeded with moveTo.
+ * Arc stroke re-seeded with moveTo: Pixi v8 adds arc points into the current
+ * sub-path, so a fresh seed keeps the arc isolated from previous shapes.
  */
 function strokeArc(
   graphics: Graphics,

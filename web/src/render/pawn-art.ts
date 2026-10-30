@@ -1,4 +1,4 @@
-import { Texture } from 'pixi.js';
+import { CanvasSource, Texture } from 'pixi.js';
 import type { PlayerLook } from './palette';
 import { PLAYERS } from './palette';
 
@@ -13,9 +13,13 @@ export interface PawnTextures {
  * (saturation 0.6); actual alpha stays on the sprite.
  */
 export function createPawnTextures(): PawnTextures {
+  // explicit CanvasSource: Texture.from's options version ignored resolution
+  // here (art review #6 measured pawn sprites at 2x logical size)
+  const textureOf = (canvas: HTMLCanvasElement): Texture =>
+    new Texture({ source: new CanvasSource({ resource: canvas, resolution: 2 }) });
   return {
-    normal: PLAYERS.map((look) => Texture.from(pawnCanvas(look, false))),
-    washed: PLAYERS.map((look) => Texture.from(pawnCanvas(look, true))),
+    normal: PLAYERS.map((look) => textureOf(pawnCanvas(look, false))),
+    washed: PLAYERS.map((look) => textureOf(pawnCanvas(look, true))),
   };
 }
 

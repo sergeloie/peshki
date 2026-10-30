@@ -1,14 +1,14 @@
 {
   "rendering": "software renderer (SwiftShader); a device 60 fps number is ticket #8 on real hardware",
   "textureBudget": {
-    "canvasesCreatedAtBoot": 25,
+    "canvasesCreatedAtBoot": 27,
     "canvasesCreatedWhileIdle": 0,
     "pass": true
   },
   "staticSceneCost": {
-    "renderTreeNodes": 155,
-    "sprites": 77,
-    "graphics": 34,
+    "renderTreeNodes": 143,
+    "sprites": 81,
+    "graphics": 30,
     "filtersInTree": 0,
     "masksInTree": 0
   },
@@ -16,7 +16,7 @@
     "artBytes": 187564,
     "artBudgetBytes": 3000000,
     "artBudgetPass": true,
-    "totalRequestBytes": 7708825,
+    "totalRequestBytes": 7724570,
     "topResources": [
       {
         "resource": "pixi__js.js?v=dd6fefe1",

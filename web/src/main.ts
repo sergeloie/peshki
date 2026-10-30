@@ -28,10 +28,18 @@ async function main() {
     if (screen !== null) return;
     app.stage.removeChild(menu.root);
     app.stage.addChild(table.root); // table stays under the game
+    // debug harness (art review #6): ?layers=a,b hides everything else
+    const params = new URLSearchParams(window.location.search);
+    const layerParam = params.get('layers');
+    const visibleLayers = layerParam === null
+      ? undefined
+      : new Set(layerParam.split(',').filter((name) => name.length > 0));
     screen = createGameScreen({
       difficulty: effectiveDifficulty(progress),
       ticker: app.ticker,
       seed,
+      visibleLayers,
+      debug: params.has('audit'),
       onGameOver: () => {
         platform.setGameplayActive(false);
         void recordCompletedGame(platform, progress)
