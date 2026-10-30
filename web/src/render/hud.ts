@@ -2,7 +2,7 @@ import { CanvasSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.j
 import { COLORS, PLAYERS } from './palette';
 import { FONTS } from './fonts';
 import type { GameTextures } from './textures';
-import { STRINGS } from '../ui/strings';
+import { t } from '../i18n';
 
 export interface PlayerChipState {
   playerIndex: number;
@@ -109,6 +109,8 @@ export interface HudView {
   root: Container;
   layout(width: number, height: number, geometry: GameLayout): void;
   update(state: HudState): void;
+  /** §7: while a dialog is open the live row (dice, roll, pause, message) must not show. */
+  setLive(value: boolean): void;
   /** §6 unspent-die pulse; drive from a ticker with delta ms. */
   tick(elapsedMs: number): void;
 }
@@ -192,8 +194,12 @@ function hexaCss(color: number, alpha: number): string {
   return `rgba(${(color >> 16) & 0xff},${(color >> 8) & 0xff},${color & 0xff},${alpha})`;
 }
 
-export function createHud(textures: GameTextures, handlers: { onRoll(): void; onSum(): void }): HudView {
+export function createHud(
+  textures: GameTextures,
+  handlers: { onRoll(): void; onSum(): void; onPause?(): void },
+): HudView {
   const root = new Container();
+  root.label = 'hud';
 
   const topPanel = new Graphics();
   const trayPanel = new Graphics();
@@ -227,7 +233,7 @@ export function createHud(textures: GameTextures, handlers: { onRoll(): void; on
   const rollButton = new Container();
   const rollPlate = new Graphics();
   const rollLabel = new Text({
-    text: STRINGS.gameThrow,
+    text: t('game.throw'),
     style: { fill: 0xf2e8dc, fontFamily: FONTS.body, fontWeight: '700' },
   });
   rollLabel.anchor.set(0.5);
@@ -242,16 +248,29 @@ export function createHud(textures: GameTextures, handlers: { onRoll(): void; on
   rollButton.on('pointerupoutside', release);
   rollButton.on('pointerleave', release);
 
+  // §7 pause corner: 48 px round plate with two bars; main owns the pause dialog
+  const pauseButton = new Container();
+  const pausePlate = new Graphics();
+  const pauseIcon = new Graphics();
+  pausePlate.circle(0, 0, 24).fill({ color: 0x241511, alpha: 0.94 }).stroke({ width: 1.5, color: COLORS.brass, alpha: 0.8 });
+  pauseIcon.roundRect(-6.2, -9, 3.6, 18, 1.8).fill(0xf2e8dc);
+  pauseIcon.roundRect(2.6, -9, 3.6, 18, 1.8).fill(0xf2e8dc);
+  pauseButton.addChild(pausePlate, pauseIcon);
+  pauseButton.eventMode = handlers.onPause ? 'static' : 'none';
+  pauseButton.cursor = 'pointer';
+  pauseButton.on('pointertap', () => handlers.onPause?.());
+  pauseButton.visible = handlers.onPause !== undefined;
+
+  // §7 dialog rule: everything live — dice, roll, pause, message — hides as one layer
+  const liveLayer = new Container();
+  liveLayer.label = 'hud-live';
+  liveLayer.addChild(diceShadows, diceLayer, dicePulse, sumChip, message, rollButton, pauseButton);
+
   root.addChild(
     topPanel,
     trayPanel,
     sidePanel,
-    diceShadows,
-    diceLayer,
-    dicePulse,
-    sumChip,
-    message,
-    rollButton,
+    liveLayer,
     // player rows last: the panels must not cover the list or the top bar
     ...chips.map((chip) => chip.sprite),
   );
@@ -394,6 +413,9 @@ function strokeArc(
 
   return {
     root,
+    setLive(value) {
+      liveLayer.visible = value;
+    },
     layout(nextWidth, nextHeight, next) {
       geometry = next;
       width = nextWidth;
@@ -414,6 +436,7 @@ function strokeArc(
         chip.count.style.fontSize = baseFont + scaleUp;
       }); */
       rollLabel.style.fontSize = Math.round(baseFont * 1.25);
+      rollLabel.text = t('game.throw');
       message.style.fontSize = baseFont + 1;
       sumLabel.style.fontSize = Math.round(baseFont * 1.05);
 
@@ -435,6 +458,8 @@ function strokeArc(
           .moveTo(0, trayTop)
           .lineTo(width, trayTop)
           .stroke({ width: 1, color: COLORS.brass, alpha: 0.3 });
+        // pause in the tray's free left pocket (the dice occupy the centre)
+        pauseButton.position.set(28 * pad + 4, trayTop + 42 * pad);
 
         const rowWidth = diceSize * 2 + diceGap;
         const diceY = trayTop + 12 * pad;
@@ -453,6 +478,8 @@ function strokeArc(
         const panelX = width - panelWidth;
         sidePanel.rect(panelX, 0, panelWidth, height).fill({ color: COLORS.panel, alpha: 0.92 });
         sidePanel.moveTo(panelX, 0).lineTo(panelX, height).stroke({ width: 1, color: COLORS.brass, alpha: 0.3 });
+        // pause in the panel's top-left corner (art §7.3.1 corner icon)
+        pauseButton.position.set(panelX + 24 * pad + 2, 24 * pad + 2);
 
         // top block: dice pair → sum chip → roll → message
         const diceX = panelX + (panelWidth - diceSize) / 2;
@@ -499,8 +526,7 @@ function strokeArc(
         diceShadows.addChild(sprite);
       }
     },
-    update(state) {
-      remaining = [...state.remaining];
+    update(state) {      remaining = [...state.remaining];
       diceLayer.clear();
       // §6: the physical dice always sit on the tray; before the first roll they
       // rest at half light so the primary interaction is never an empty tray
