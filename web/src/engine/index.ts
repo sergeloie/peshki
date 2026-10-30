@@ -1,0 +1,17 @@
+export { DEFAULT_CONFIG, derive, validateConfig } from './config';
+export type { GameConfig, DerivedConfig } from './config';
+export { BoardTopology } from './topology';
+export { buildCells } from './cells';
+export type { Cell, CellType } from './cells';
+export { Position, BENCH_CELL } from './position';
+export type { PawnRef } from './position';
+export { Board } from './board';
+export type { PawnState } from './board';
+export { tracePath, findTarget } from './target-search';
+export { generateMoves, moveKey } from './moves';
+export type { Move, StepMove, PlaceMove } from './moves';
+export { applyMove } from './apply';
+export type { GameEvent } from './events';
+export { seededRandom } from './rng';
+export { Game } from './game';
+export type { GameOptions } from './game';

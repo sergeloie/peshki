@@ -15,3 +15,11 @@ export function createFlow(platform: Pick<Platform, 'ready'>): Flow {
     },
   };
 }
+
+/**
+ * shortcut: turn alternation and the extra-turn rule are ticket #4; until then
+ * the same player rolls again once the dice are spent.
+ */
+export function nextRollerAfterDiceSpent(currentPlayer: number): number {
+  return currentPlayer;
+}
