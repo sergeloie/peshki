@@ -1,23 +1,23 @@
 {
   "rendering": "software renderer (SwiftShader); the rAF sample below is software p50/p95, NOT a device 60 fps number — see docs/perf-device-checklist.md for #9",
   "textureBudget": {
-    "canvasesCreatedAtBoot": 29,
+    "canvasesCreatedAtBoot": 30,
     "canvasesCreatedWhileIdle": 0,
     "pass": true
   },
   "staticSceneCost": {
-    "renderTreeNodes": 178,
+    "renderTreeNodes": 179,
     "sprites": 101,
-    "graphics": 38,
+    "graphics": 39,
     "filtersInTree": 0,
     "masksInTree": 0
   },
   "frameCost": {
     "renderer": "software (SwiftShader)",
     "sampleCount": 180,
-    "p50": 266.7,
-    "p95": 300.1,
-    "max": 333.3,
+    "p50": 250,
+    "p95": 266.7,
+    "max": 283.4,
     "note": "device 60 fps (p95 < 16 ms) stays ticket #9 on a real GPU"
   },
   "drawCalls": {
@@ -33,35 +33,35 @@
     "artBytes": 216412,
     "artBudgetBytes": 3000000,
     "artBudgetPass": true,
-    "totalRequestBytes": 8030457,
+    "totalRequestBytes": 8029354,
     "topResources": [
       {
-        "resource": "pixi__js.js?v=d7bcc591",
+        "resource": "pixi__js.js?v=3757cc8a",
         "bytes": 3790180,
         "art": false
       },
       {
-        "resource": "CanvasPool-CKBgjVg_.js?v=d7bcc591",
+        "resource": "CanvasPool-CKBgjVg_.js?v=3757cc8a",
         "bytes": 718477,
         "art": false
       },
       {
-        "resource": "GraphicsContext-DbBaCOsL.js?v=d7bcc591",
+        "resource": "GraphicsContext-DbBaCOsL.js?v=3757cc8a",
         "bytes": 672281,
         "art": false
       },
       {
-        "resource": "RenderTargetSystem-BdFca6T7.js?v=d7bcc591",
+        "resource": "RenderTargetSystem-BdFca6T7.js?v=3757cc8a",
         "bytes": 435903,
         "art": false
       },
       {
-        "resource": "Filter-CteG7TAT.js?v=d7bcc591",
+        "resource": "Filter-CteG7TAT.js?v=3757cc8a",
         "bytes": 390437,
         "art": false
       },
       {
-        "resource": "FederatedEventTarget-jrCASupg.js?v=d7bcc591",
+        "resource": "FederatedEventTarget-jrCASupg.js?v=3757cc8a",
         "bytes": 318711,
         "art": false
       }
