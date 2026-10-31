@@ -17,12 +17,21 @@ const GAME_URL = 'http://localhost:5173/?screen=game&seed=424242';
 // fresh browser and stale headless shells are force-killed at the end.
 let browser: Browser | null = null;
 
+/** Fresh profiles queue all four hint concepts; art/game shots need the clean board. */
+async function dismissHints(page: Page): Promise<void> {
+  for (let index = 0; index < 4; index += 1) {
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(140);
+  }
+}
+
 async function freshGamePage(viewport: { width: number; height: number }): Promise<Page> {
   browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] });
   const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
   await page.goto(GAME_URL);
   await page.waitForSelector('canvas');
-  // bots play while the shot is taken; the board must show a real game
+  await dismissHints(page);
+  // bots idle while the human seat waits; the board must show a real game
   await page.waitForTimeout(2500);
   await expect(page.locator('canvas')).toBeVisible();
   return page;
@@ -143,6 +152,7 @@ test.describe('art pass evidence', () => {
     });
     await page.goto(`${GAME_URL}&audit=1`);
     await page.waitForSelector('canvas');
+    await dismissHints(page);
     await page.waitForTimeout(3000);
     const canvasesAtBoot = await page.evaluate(
       () => (window as unknown as { __peshkiAudit: { canvases: number } }).__peshkiAudit.canvases,
@@ -312,6 +322,8 @@ test.describe('ticket #7 screens and i18n evidence', () => {
           for (const state of chunk) {
             await page.goto(`http://localhost:5173/?lang=${lang}${state.suffix}`);
             await page.waitForSelector('canvas');
+            // game states carry the first-run hint card; modal shots want the board visible too
+            if (state.suffix.includes('screen=game')) await dismissHints(page);
             // dialogs slide in at 1.2 s (result) / 1.5 s (pause, howto, settings); bots animate meanwhile
             await page.waitForTimeout(2600);
             await page.screenshot({
@@ -342,6 +354,7 @@ test.describe('ticket #8 effect + TV captures', () => {
       const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: 1 });
       await page.goto('http://localhost:5173/?screen=game&seed=424242&audit=1&fx=kill');
       await page.waitForSelector('canvas');
+      await dismissHints(page);
       // staging fires at 1500 ms: hop 120 ms, arc 360 ms — the apex is ~1.75 s
       await page.waitForTimeout(1780);
       await page.screenshot({ path: resolve(SHOT_DIR, `fx-kill-${viewport.name}.png`), timeout: 55_000 });
@@ -356,6 +369,8 @@ test.describe('ticket #8 effect + TV captures', () => {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     await page.goto(`${GAME_URL}&audit=1`);
     await page.waitForSelector('canvas');
+    // the hint card owns Enter while it shows; clear the queue before the roll walk
+    await dismissHints(page);
     await page.waitForTimeout(2500);
     // walk focus:targets appear once dice are rolled and hint rings are on the board
     await page.keyboard.press('ArrowDown');

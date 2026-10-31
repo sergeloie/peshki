@@ -14,6 +14,8 @@ export interface BoardView {
   focusCell(cellIndex: number | null): void;
   /** §4: corner symbols stay engraved until the player's first pawn is placed. */
   setCornerOccupied(playerIndex: number, occupied: boolean): void;
+  /** Review #8 round 2: portrait reads the bench recesses as debris — hide them there too. */
+  setBenchSlotsVisible(visible: boolean): void;
   /** Debug harness (art review #6): show only the named material layers. */
   setLayerVisible(names: ReadonlySet<string>): void;
 }
@@ -65,6 +67,7 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
   let geometry = initial;
   let points = new Map<number, Point>();
   const occupiedCorners = [false, false, false, false];
+  let benchSlotsShown = true;
 
   function layout(next: BoardGeometry): void {
     geometry = next;
@@ -267,6 +270,8 @@ const OUTER_CONTACT = [
 
   /** §4 benches: four recessed seats Ø53 with rim light. */
   function drawBenchSlots(): void {
+    benchesG.clear();
+    if (!benchSlotsShown) return; // portrait review: recesses read as debris at this scale
     const { scale: k } = geometry;
     for (const benches of geometry.benches) {
       for (const slot of benches) {
@@ -332,6 +337,11 @@ const OUTER_CONTACT = [
       if (occupiedCorners[playerIndex] === occupied) return;
       occupiedCorners[playerIndex] = occupied;
       drawCornerMarks();
+    },
+    setBenchSlotsVisible(visible) {
+      if (benchSlotsShown === visible) return;
+      benchSlotsShown = visible;
+      drawBenchSlots();
     },
     setLayerVisible(names) {
       for (const [name, layer] of Object.entries(layerOf)) layer.visible = names.has(name);
