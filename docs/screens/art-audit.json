@@ -1,50 +1,67 @@
 {
-  "rendering": "software renderer (SwiftShader); a device 60 fps number is ticket #8 on real hardware",
+  "rendering": "software renderer (SwiftShader); the rAF sample below is software p50/p95, NOT a device 60 fps number — see docs/perf-device-checklist.md for #9",
   "textureBudget": {
-    "canvasesCreatedAtBoot": 28,
+    "canvasesCreatedAtBoot": 29,
     "canvasesCreatedWhileIdle": 0,
     "pass": true
   },
   "staticSceneCost": {
-    "renderTreeNodes": 154,
-    "sprites": 81,
-    "graphics": 35,
+    "renderTreeNodes": 178,
+    "sprites": 101,
+    "graphics": 38,
     "filtersInTree": 0,
     "masksInTree": 0
+  },
+  "frameCost": {
+    "renderer": "software (SwiftShader)",
+    "sampleCount": 180,
+    "p50": 250,
+    "p95": 283.4,
+    "max": 283.4,
+    "note": "device 60 fps (p95 < 16 ms) stays ticket #9 on a real GPU"
+  },
+  "drawCalls": {
+    "maxPerFrameDuringBotsWithEffects": 19,
+    "note": "counted at the WebGL draw*() call level during a live bot sequence"
+  },
+  "textureMemory": {
+    "sharedProceduralTextures": 3711232,
+    "pawnBakes": 1433600,
+    "note": "RGBA 4bpp estimate; pawn canvases are fixed 100x112 design @2x; chips re-bake only on content change"
   },
   "downloadBudget": {
     "artBytes": 216412,
     "artBudgetBytes": 3000000,
     "artBudgetPass": true,
-    "totalRequestBytes": 7899919,
+    "totalRequestBytes": 8030553,
     "topResources": [
       {
-        "resource": "pixi__js.js?v=5641b780",
+        "resource": "pixi__js.js?v=c9e33841",
         "bytes": 3790180,
         "art": false
       },
       {
-        "resource": "CanvasPool-CKBgjVg_.js?v=5641b780",
+        "resource": "CanvasPool-CKBgjVg_.js?v=5148e5bb",
         "bytes": 718477,
         "art": false
       },
       {
-        "resource": "GraphicsContext-DbBaCOsL.js?v=5641b780",
+        "resource": "GraphicsContext-DbBaCOsL.js?v=5148e5bb",
         "bytes": 672281,
         "art": false
       },
       {
-        "resource": "RenderTargetSystem-BdFca6T7.js?v=5641b780",
+        "resource": "RenderTargetSystem-BdFca6T7.js?v=5148e5bb",
         "bytes": 435903,
         "art": false
       },
       {
-        "resource": "Filter-CteG7TAT.js?v=5641b780",
+        "resource": "Filter-CteG7TAT.js?v=5148e5bb",
         "bytes": 390437,
         "art": false
       },
       {
-        "resource": "FederatedEventTarget-jrCASupg.js?v=5641b780",
+        "resource": "FederatedEventTarget-jrCASupg.js?v=5148e5bb",
         "bytes": 318711,
         "art": false
       }
