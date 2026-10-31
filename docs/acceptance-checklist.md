@@ -167,7 +167,7 @@ $ Select-String -Path web/dist/index.html -Pattern "src=|href="
 
 | Item | Demands | How this build satisfies it | Evidence | Status |
 |---|---|---|---|---|
-| 2.1 | Content, convenience and gameplay are worked through | The rules are implemented in full, 117 unit tests including 22 numbered engine scenarios, four how-to pages, hints for the first game, pause, sound and language settings | `npm test` output (117 passed), `docs/screens/` (32 states) | satisfied |
+| 2.1 | Content, convenience and gameplay are worked through | The rules are implemented in full, 117 unit tests including 22 numbered engine scenarios plus the fuzzer for item 23, four how-to pages, hints for the first game, pause, sound and language settings | `npm test` output (117 passed), `docs/screens/` (32 states) | satisfied |
 | 2.2 | Controls fully described in the game or in the draft | Four-page «Как играть» from menu and from pause, plus the first-match hint card; the draft text repeats the controls | `docs/screens/screens-howto-ru-portrait.png`, `docs/screens/screens-hint-portrait.png`, `docs/store-draft.md` §How to play | satisfied |
 | 2.3 | Matches the genre declared in the draft | Declared as a board game (настольная игра); no draft exists yet to compare against | `docs/store-draft.md` §Genre | satisfied (manual check outstanding) — console draft |
 | 2.4 | Meets at least one "has game mechanics" criterion | Dice-driven movement with choice of die, captures that reset progress, a home straight with an exact-landing rule, a turn loop with bonus rolls | `web/test/engine/*.test.ts` (22 numbered scenarios), `web/test/pacing.test.ts` | satisfied |
