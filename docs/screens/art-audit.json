@@ -15,9 +15,9 @@
   "frameCost": {
     "renderer": "software (SwiftShader)",
     "sampleCount": 180,
-    "p50": 250,
-    "p95": 283.4,
-    "max": 283.4,
+    "p50": 266.7,
+    "p95": 300.1,
+    "max": 333.3,
     "note": "device 60 fps (p95 < 16 ms) stays ticket #9 on a real GPU"
   },
   "drawCalls": {
@@ -33,35 +33,35 @@
     "artBytes": 216412,
     "artBudgetBytes": 3000000,
     "artBudgetPass": true,
-    "totalRequestBytes": 8030553,
+    "totalRequestBytes": 8030457,
     "topResources": [
       {
-        "resource": "pixi__js.js?v=c9e33841",
+        "resource": "pixi__js.js?v=d7bcc591",
         "bytes": 3790180,
         "art": false
       },
       {
-        "resource": "CanvasPool-CKBgjVg_.js?v=5148e5bb",
+        "resource": "CanvasPool-CKBgjVg_.js?v=d7bcc591",
         "bytes": 718477,
         "art": false
       },
       {
-        "resource": "GraphicsContext-DbBaCOsL.js?v=5148e5bb",
+        "resource": "GraphicsContext-DbBaCOsL.js?v=d7bcc591",
         "bytes": 672281,
         "art": false
       },
       {
-        "resource": "RenderTargetSystem-BdFca6T7.js?v=5148e5bb",
+        "resource": "RenderTargetSystem-BdFca6T7.js?v=d7bcc591",
         "bytes": 435903,
         "art": false
       },
       {
-        "resource": "Filter-CteG7TAT.js?v=5148e5bb",
+        "resource": "Filter-CteG7TAT.js?v=d7bcc591",
         "bytes": 390437,
         "art": false
       },
       {
-        "resource": "FederatedEventTarget-jrCASupg.js?v=5148e5bb",
+        "resource": "FederatedEventTarget-jrCASupg.js?v=d7bcc591",
         "bytes": 318711,
         "art": false
       }
