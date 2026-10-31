@@ -326,7 +326,9 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
 
     const sprite = pawnViews.sprite(move.playerIndex, move.pawnIndex);
     if (move.kind === 'place') {
-      const corner = boardView.pointOf(move.targetCellIndex);
+      // place-and-move: targetCellIndex is the final cell, so the pawn must set down
+      // on the corner first and walk from there — not fly straight to the target
+      const corner = boardView.pointOf(game.board.cornerCell(move.playerIndex));
       if (corner !== null) {
         const from = { x: sprite.x, y: sprite.y };
         const fromScale = 0.62 * geometry.scale;
