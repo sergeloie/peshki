@@ -10,8 +10,12 @@ export interface BoardView {
   pointOf(cellIndex: number): Point | null;
   /** §7.3 move hint: dotted brass line from the selected pawn to each legal target. */
   highlight(cellIndices: number[], origin?: Point | null): void;
+  /** TV/keyboard focus ring over a legal target cell (board is reachable without a pointer). */
+  focusCell(cellIndex: number | null): void;
   /** §4: corner symbols stay engraved until the player's first pawn is placed. */
   setCornerOccupied(playerIndex: number, occupied: boolean): void;
+  /** Review #8 round 2: portrait reads the bench recesses as debris — hide them there too. */
+  setBenchSlotsVisible(visible: boolean): void;
   /** Debug harness (art review #6): show only the named material layers. */
   setLayerVisible(names: ReadonlySet<string>): void;
 }
@@ -44,7 +48,9 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
   const medallion = new Sprite({ texture: textures.medallion });
   const marks = new Graphics();
   const highlights = new Graphics();
-  root.addChild(shadows, frameG, trackG, cellsG, tailsG, benchesG, medallion, marks, highlights);
+  // keyboard focus ring is not part of the debug layer ledger: an input state, not material
+  const focusG = new Graphics();
+  root.addChild(shadows, frameG, trackG, cellsG, tailsG, benchesG, medallion, marks, highlights, focusG);
 
   const layerOf: Record<(typeof BOARD_LAYERS)[number], Container> = {
     shadows,
@@ -61,6 +67,7 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
   let geometry = initial;
   let points = new Map<number, Point>();
   const occupiedCorners = [false, false, false, false];
+  let benchSlotsShown = true;
 
   function layout(next: BoardGeometry): void {
     geometry = next;
@@ -107,7 +114,27 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
 
     // cherry face under the cells
     frameG.roundRect(center.x - faceHalf, center.y - faceHalf, faceHalf * 2, faceHalf * 2, 8 * k).fill(COLORS.boardInner);
+    // §3 board-depth (round 2 handover): the walnut frame drops onto the face —
+    // stepped strokes read as a soft contact band, not a hard seam, no filter
+    for (const [offset, width, alpha] of OUTER_CONTACT) {
+      const inset = offset * k;
+      frameG
+        .roundRect(center.x - faceHalf + inset, center.y - faceHalf + inset, faceHalf * 2 - inset * 2, faceHalf * 2 - inset * 2, 8 * k)
+        .stroke({ width: width * k, color: COLORS.engraved, alpha });
+    }
+    // thin lift where the face meets light on top-left
+    frameG
+      .moveTo(center.x - faceHalf + 26 * k, center.y - faceHalf + 8 * k)
+      .lineTo(center.x - faceHalf + 8 * k, center.y - faceHalf + 26 * k)
+      .stroke({ width: 2 * k, color: COLORS.frameEdge, alpha: 0.5 });
   }
+
+/** Contact band: offset/width/alpha steps of the frame's cast shadow onto the face. */
+const OUTER_CONTACT = [
+  [4, 48, 0.06],
+  [16, 34, 0.08],
+  [30, 20, 0.1],
+] as const;
 
   /** Continuous dark groove along the ring path (§4 «колея»). */
   function drawTrack(): void {
@@ -123,6 +150,9 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
       { x: center.x - R, y: center.y },
       { x: center.x - R, y: center.y - R },
     ];
+    // §3 board-depth: the groove occludes toward bottom-right, off the key light
+    const occlusion: Point[] = octagon.map((point) => ({ x: point.x + 7 * k, y: point.y + 9 * k }));
+    strokePolygon(trackG, occlusion, (RING_CELL_SIZE + 30) * k, COLORS.engraved, 0.3);
     strokePolygon(trackG, octagon, (RING_CELL_SIZE + 30) * k, COLORS.track, 0.22);
     strokePolygon(trackG, octagon, (RING_CELL_SIZE + 10) * k, COLORS.track, 0.5);
     strokePolygon(trackG, octagon, RING_CELL_SIZE * k, COLORS.track, 1);
@@ -150,11 +180,28 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
     }
   }
 
+  /**
+   * §3 board-depth (round 2 handover from #6): key light from the top-left
+   * falls across the board — cells nearer the light read lighter, the
+   * far side settles into the cherry deep value. Factor is precomputed per
+   * tile at layout; no per-frame filter is involved.
+   */
+  function lightTilt(x: number, y: number): number {
+    const { center, scale: k } = geometry;
+    const reach = 640 * k;
+    const shell = Math.max(-1, Math.min(1, (x + y - center.x - center.y) / (2 * reach)));
+    return shell * 0.5;
+  }
+
   /** One tile: slab + 1 px brass reflected edge + lit face (+ corner ownership tint). */
   function drawTile(x: number, y: number, size: number, look: (typeof PLAYERS)[number] | null): void {
     const k = geometry.scale;
-    const slab = look === null ? COLORS.cellDeep : mixColor(COLORS.cellDeep, look.color, 0.12);
-    const face = look === null ? COLORS.cell : mixColor(COLORS.cell, look.color, 0.2);
+    const tilt = lightTilt(x, y);
+    // far side deepens even before the slab; near side lifts toward the lit maple
+    const slabBase = look === null ? COLORS.cellDeep : mixColor(COLORS.cellDeep, look.color, 0.12);
+    const faceBase = look === null ? COLORS.cell : mixColor(COLORS.cell, look.color, 0.2);
+    const slab = tilt > 0 ? mixColor(slabBase, COLORS.engraved, Math.min(0.4, tilt * 0.5)) : slabBase;
+    const face = tilt < 0 ? mixColor(faceBase, COLORS.cellLight, Math.min(0.32, -tilt * 0.6)) : faceBase;
 
     cellsG.roundRect(x - size / 2, y - size / 2 + 4 * k, size, size, 12 * k).fill(slab);
     cellsG
@@ -223,6 +270,8 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
 
   /** §4 benches: four recessed seats Ø53 with rim light. */
   function drawBenchSlots(): void {
+    benchesG.clear();
+    if (!benchSlotsShown) return; // portrait review: recesses read as debris at this scale
     const { scale: k } = geometry;
     for (const benches of geometry.benches) {
       for (const slot of benches) {
@@ -271,10 +320,28 @@ export function createBoardView(initial: BoardGeometry, textures: GameTextures):
     pointOf(cellIndex) {
       return points.get(cellIndex) ?? null;
     },
+    focusCell(cellIndex) {
+      focusG.clear();
+      if (cellIndex === null) return;
+      const point = points.get(cellIndex);
+      if (point === undefined) return;
+      const { scale: k, cellSize } = geometry;
+      focusG
+        .circle(point.x, point.y, cellSize * 0.52)
+        .stroke({ width: 4 * k, color: COLORS.brassLight, alpha: 0.95 });
+      focusG
+        .circle(point.x, point.y, cellSize * 0.52 - 7 * k)
+        .stroke({ width: 1.5 * k, color: COLORS.brass, alpha: 0.9 });
+    },
     setCornerOccupied(playerIndex, occupied) {
       if (occupiedCorners[playerIndex] === occupied) return;
       occupiedCorners[playerIndex] = occupied;
       drawCornerMarks();
+    },
+    setBenchSlotsVisible(visible) {
+      if (benchSlotsShown === visible) return;
+      benchSlotsShown = visible;
+      drawBenchSlots();
     },
     setLayerVisible(names) {
       for (const [name, layer] of Object.entries(layerOf)) layer.visible = names.has(name);

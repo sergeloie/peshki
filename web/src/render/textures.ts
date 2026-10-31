@@ -8,6 +8,7 @@ export interface GameTextures {
   cellShadow: Texture;
   medallion: Texture;
   glow: Texture;
+  spark: Texture;
 }
 
 /**
@@ -23,6 +24,7 @@ export function createGameTextures(): GameTextures {
     cellShadow: Texture.from(cellShadowCanvas()),
     medallion: Texture.from(medallionCanvas()),
     glow: Texture.from(glowCanvas()),
+    spark: Texture.from(sparkCanvas()),
   };
 }
 
@@ -219,5 +221,18 @@ function glowCanvas(): HTMLCanvasElement {
   gradient.addColorStop(1, 'rgba(255,190,130,0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 512, 512);
+  return el;
+}
+
+/** §8 particles on phones are squares from the shared atlas: soft 16 px square, white so tint drives colour. */
+function sparkCanvas(): HTMLCanvasElement {
+  const el = canvas(16);
+  const ctx = el.getContext('2d')!;
+  const g = ctx.createRadialGradient(8, 8, 1, 8, 8, 8);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.55, 'rgba(255,255,255,0.85)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 16, 16);
   return el;
 }

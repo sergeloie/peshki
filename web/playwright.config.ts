@@ -2,9 +2,11 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'tests',
-  timeout: 600_000,
-  // this host's chrome-shell launch occasionally wedges for minutes; one retry is enough
-  retries: 1,
+  // wedged runs resolve fast or not at all: a hang must not sit 10 minutes on one test
+  timeout: 60_000,
+  // this host's chrome-shell launch occasionally wedges for minutes; a wedged
+  // test fails here and the caller re-runs the chunk — no retry hour burned
+  retries: 0,
   // art shots run on demand: npm run screens (slow — software rendering, see README)
   outputDir: '.tmp/playwright',
   // a run that misses its own server would pin port 5173 — always own the server lifecycle

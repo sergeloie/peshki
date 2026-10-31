@@ -17,6 +17,9 @@ import type { Container } from 'pixi.js';
 import { createRenderer } from './render/app';
 import { createTableSurface } from './render/table-surface';
 import { loadFonts } from './render/fonts';
+import { audio } from './render/audio';
+import { configureSafeArea } from './render/hud';
+import { sharedTextures } from './render/table-surface';
 import { pickLanguage, setLanguage, t } from './i18n';
 import { createGameScreen } from './ui/game-screen';
 import type { GameOutcome, GameScreen } from './ui/game-screen';
@@ -42,9 +45,10 @@ function asOutcomeKind(value: string | null): GameOutcome['kind'] | undefined {
 
 async function main() {
   const debug = new URLSearchParams(window.location.search);
+  const audioEngine = audio;
   const platform = createPlatform({
-    // shortcut: the audio bank lands in a later ticket; the switch stores the preference for it
-    setMuted: () => {},
+    // §10: window blur, visibility change and the Yandex pause all land here
+    setMuted: (muted) => audioEngine.setMuted(muted),
   });
   await platform.boot();
   let progress = await loadGameProgress(platform);
@@ -52,8 +56,29 @@ async function main() {
   // stored manual choice beats the SDK language; ru stays the fallback
   setLanguage(progress.language ?? pickLanguage(debug.get('lang') ?? platform.language()));
 
+  // sound preference from the settings blob; the system gate stays independent
+  audioEngine.setPreference(!progress.sound);
+
   // Pixi Text rasterises on first draw: bundle fonts must land before any canvas
   await loadFonts();
+
+  // §7 safe-area insets from the browser env; re-read with every resize
+  const readSafeArea = (): void => {
+    const probe = document.createElement('div');
+    probe.style.cssText =
+      'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+    document.body.appendChild(probe);
+    const style = window.getComputedStyle(probe);
+    const parse = (value: string): number => Number.parseFloat(value) || 0;
+    configureSafeArea({
+      top: parse(style.paddingTop),
+      right: parse(style.paddingRight),
+      bottom: parse(style.paddingBottom),
+      left: parse(style.paddingLeft),
+    });
+    probe.remove();
+  };
+  readSafeArea();
 
   const app = await createRenderer();
   const table = createTableSurface();
@@ -208,6 +233,7 @@ async function main() {
       {
         onToggleSound(soundOn) {
           progress = { ...progress, sound: soundOn };
+          audioEngine.setPreference(!soundOn);
           pushSave(progress);
         },
         onPickLanguage(language) {
@@ -279,6 +305,7 @@ async function main() {
       visibleLayers,
       debug: params.has('audit'),
       resultOverride: asOutcomeKind(params.get('result')),
+      fxStage: params.get('fx') === 'kill' ? ('kill' as const) : null,
       onPauseRequest: openPause,
       onTurnEnd: (game) => autosave.schedule(game),
       hints: pendingHints(progress),
@@ -331,6 +358,7 @@ async function main() {
   menu.layout(app.screen.width, app.screen.height);
 
   app.renderer.on('resize', (width: number, height: number) => {
+    readSafeArea();
     table.layout(width, height);
     menu.layout(width, height);
     screen?.layout(width, height);
@@ -350,7 +378,20 @@ async function main() {
 
   // ?audit=1 — screenshot harness hooks; not part of the shipping surface
   if (typeof URLSearchParams !== 'undefined' && new URLSearchParams(window.location.search).has('audit')) {
-    (window as unknown as Record<string, unknown>).__peshki = { app };
+    // texture memory estimate for the audit json (RGBA 4bpp over every shared procedural source)
+    const shared = sharedTextures();
+    const bytesOf = (texture: { source: { pixelWidth: number; pixelHeight: number } }): number =>
+      texture.source.pixelWidth * texture.source.pixelHeight * 4;
+    const textureBytes =
+      bytesOf(shared.wood) +
+      bytesOf(shared.vignette) +
+      bytesOf(shared.grain) +
+      bytesOf(shared.shadow) +
+      bytesOf(shared.cellShadow) +
+      bytesOf(shared.medallion) +
+      bytesOf(shared.glow) +
+      bytesOf(shared.spark);
+    (window as unknown as Record<string, unknown>).__peshki = { app, textureBytes };
   }
 
   // ?screen=game&seed=… — debug route used by the screenshot battery

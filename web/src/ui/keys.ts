@@ -28,7 +28,10 @@ function handle(event: KeyboardEvent): void {
     }
     if (buttons.length === 0) return;
 
-    const step = event.key === 'Tab' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+    // TV remote: the d-pad sends arrows; any axis walks the same linear list
+    const down = event.key === 'ArrowDown' || event.key === 'ArrowRight';
+    const up = event.key === 'ArrowUp' || event.key === 'ArrowLeft';
+    const step = (event.key === 'Tab' || down ? 1 : up ? -1 : 0);
     if (step !== 0) {
       event.preventDefault();
       const currentIndex = buttons.findIndex((button) => button.isFocused());

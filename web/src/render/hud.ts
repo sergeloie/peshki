@@ -3,6 +3,7 @@ import { COLORS, PLAYERS } from './palette';
 import { FONTS } from './fonts';
 import type { GameTextures } from './textures';
 import { t } from '../i18n';
+import { audio } from './audio';
 
 export interface PlayerChipState {
   playerIndex: number;
@@ -27,6 +28,25 @@ export interface GameLayout {
   /** §9 typography base: 16 phone, 17 tablet, 18 desktop, 20 TV. */
   baseFont: number;
   board: { x: number; y: number; size: number };
+}
+
+/** §7 safe-area insets (env values read once at boot; margins never drop below 8 px). */
+export interface SafeArea {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+let safeArea: SafeArea = { top: 0, right: 0, bottom: 0, left: 0 };
+
+export function configureSafeArea(next: SafeArea): void {
+  safeArea = { ...next };
+}
+
+/** Read-only access for surfaces that mirror the portrait tray geometry. */
+export function getSafeArea(): SafeArea {
+  return safeArea;
 }
 
 const TV_PAD = 1.5;
@@ -73,19 +93,26 @@ export function computeGameLayout(width: number, height: number): GameLayout {
   const short = Math.min(width, height);
   // §9: 16 phone, 17 tablet, 18 desktop, 20 TV minimum
   const baseFont = isTv ? 20 : short >= 900 ? 18 : short >= 600 ? 17 : 16;
+  // §7: env insets + margins never below 8 px; TV survives overscan with 24 px
+  const edge = (inset: number): number => Math.max(inset, Math.round(8 * pad));
+  const safeTop = edge(safeArea.top);
+  const safeRight = edge(safeArea.right);
+  const safeBottom = edge(safeArea.bottom);
+  const safeLeft = edge(safeArea.left);
 
-  if (width >= height) {
+  // §7: four aspect classes — square windows share the portrait arrangement
+  if (width > height * 1.2) {
     // §7.3.1: fixed side panel, square board left; board never stretches
+    const margin = Math.round(12 * pad);
     const panelWidth = Math.round(380 * pad);
-    const margin = 12 * pad;
-    const size = Math.min(height - 2 * margin, width - panelWidth - 3 * margin);
+    const size = Math.min(height - safeTop - safeBottom, width - panelWidth - safeLeft - safeRight - 2 * margin);
     return {
       orientation: 'landscape',
       isTv,
       baseFont,
       board: {
-        x: Math.max(margin / 2, (width - panelWidth - size) / 2),
-        y: (height - size) / 2,
+        x: Math.max(safeLeft, (width - safeRight - panelWidth - size) / 2),
+        y: (height + safeTop - safeBottom - size) / 2,
         size,
       },
     };
@@ -94,14 +121,17 @@ export function computeGameLayout(width: number, height: number): GameLayout {
   // §7.3: player chips on top (72 px: breathing room), dice tray at the bottom
   const topBar = Math.round(72 * pad);
   const tray = Math.round(224 * pad);
-  const margin = 8 * pad;
-  const size = Math.min(width - 2 * margin, height - topBar - tray - 2 * margin);
+  const size = Math.min(width - safeLeft - safeRight, height - safeTop - topBar - tray - safeBottom);
   // the board centres in whatever height is left over — no dead wood strip
   return {
     orientation: 'portrait',
     isTv,
     baseFont,
-    board: { x: (width - size) / 2, y: topBar + Math.max(0, (height - topBar - tray - size) / 2), size },
+    board: {
+      x: (width - size) / 2,
+      y: safeTop + topBar + Math.max(0, (height - safeTop - topBar - tray - safeBottom - size) / 2),
+      size,
+    },
   };
 }
 
@@ -113,6 +143,10 @@ export interface HudView {
   setLive(value: boolean): void;
   /** §6 unspent-die pulse; drive from a ticker with delta ms. */
   tick(elapsedMs: number): void;
+  /** §8 dice choreography: toss 120 ms rise, 300 ms tumble, 140 ms settle — second die +60 ms. */
+  toss(values: number[]): void;
+  /** TV/keyboard focus ring on the roll button. */
+  setRollFocused(value: boolean): void;
 }
 
 interface ChipView {
@@ -207,6 +241,9 @@ export function createHud(
   const diceShadows = new Container();
   const diceLayer = new Graphics();
   const dicePulse = new Graphics();
+  // focused roll + player-hand-over rings tick-drawn on top of the plates
+  const rollRing = new Graphics();
+  const chipRing = new Graphics();
 
   const chips: ChipView[] = PLAYERS.map((_, playerIndex) => {
     const sprite = new Sprite();
@@ -264,7 +301,7 @@ export function createHud(
   // §7 dialog rule: everything live — dice, roll, pause, message — hides as one layer
   const liveLayer = new Container();
   liveLayer.label = 'hud-live';
-  liveLayer.addChild(diceShadows, diceLayer, dicePulse, sumChip, message, rollButton, pauseButton);
+  liveLayer.addChild(diceShadows, diceLayer, dicePulse, sumChip, message, rollButton, rollRing, chipRing, pauseButton);
 
   root.addChild(
     topPanel,
@@ -282,21 +319,68 @@ export function createHud(
   let remaining: number[] = [];
   let pulse = 0;
   let sumWidth = 150;
+  let rollPlateSize = { width: 348, height: 52 };
+  let rollFocused = false;
+  let lastState: HudState | null = null;
+  let lastActiveChip = -1;
+  let handover: { age: number; chipIndex: number } | null = null;
+  let toss: { age: number; values: number[] } | null = null;
 
-  /** §2 primary button: wood face, #BF8B52 sheen, #40200F drop. */
+  /** §8 die bounce: two decaying humps over the local timeline, squash on each landing. */
+  function tossPose(t: number): { dy: number; squash: number } {
+    const hop = Math.abs(Math.sin(t * Math.PI * 2)) * (1 - t) ** 1.2;
+    const dy = -40 * hop;
+    const squash = 1 - 0.14 * hop;
+    return { dy, squash };
+  }
+
+  /** Keyboard/TV focus ring on the roll plate; redrawn on flag and layout changes. */
+  function redrawRollRing(): void {
+    rollRing.clear();
+    if (!rollFocused) return;
+    rollRing
+      .roundRect(-rollPlateSize.width / 2 - 5, -rollPlateSize.height / 2 - 5, rollPlateSize.width + 10, rollPlateSize.height + 10, rollPlateSize.height / 2 + 5)
+      .stroke({ width: 3, color: COLORS.brassLight, alpha: 0.95 });
+  }
+
+  /** §2 primary button, plaque language since #8 (same family as createButton). */
   function drawPrimaryPlate(plate: Graphics, plateWidth: number, plateHeight: number): void {
-    plate.roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, plateHeight / 2).fill(COLORS.cell);
+    const radius = Math.min(10, plateHeight * 0.2);
+    plate.roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, radius).fill(COLORS.cell);
     plate
-      .moveTo(-plateWidth / 2 + plateHeight / 2, -plateHeight / 2 + 2.2)
-      .lineTo(plateWidth / 2 - plateHeight / 2, -plateHeight / 2 + 2.2)
-      .stroke({ width: 2, color: COLORS.cellLight, alpha: 0.6 });
+      .moveTo(-plateWidth / 2 + radius, -plateHeight / 2 + 2.2)
+      .lineTo(plateWidth / 2 - radius, -plateHeight / 2 + 2.2)
+      .stroke({ width: 2, color: COLORS.cellLight, alpha: 0.55 });
     plate
-      .moveTo(-plateWidth / 2 + plateHeight / 2, plateHeight / 2 - 3)
-      .lineTo(plateWidth / 2 - plateHeight / 2, plateHeight / 2 - 3)
-      .stroke({ width: 3, color: 0x40200f, alpha: 0.85 });
+      .moveTo(-plateWidth / 2 + radius, plateHeight / 2 - 3.2)
+      .lineTo(plateWidth / 2 - radius, plateHeight / 2 - 3.2)
+      .stroke({ width: 3, color: 0x120a05, alpha: 0.5 });
     plate
-      .roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, plateHeight / 2)
-      .stroke({ width: 1.5, color: COLORS.brass, alpha: 0.8 });
+      .roundRect(-plateWidth / 2 + 3, -plateHeight / 2 + 3, plateWidth - 6, plateHeight - 6, Math.max(0, radius - 2))
+      .stroke({ width: 1, color: 0x120a05, alpha: 0.6 });
+    plate
+      .roundRect(-plateWidth / 2, -plateHeight / 2, plateWidth, plateHeight, radius)
+      .stroke({ width: 1.6, color: COLORS.brass, alpha: 0.85 });
+    if (plateWidth > 220) {
+      for (const sign of [-1, 1]) {
+        plate.circle(sign * (plateWidth / 2 - 14), 0, 3).fill({ color: COLORS.brassLight, alpha: 0.85 });
+        plate.circle(sign * (plateWidth / 2 - 14) + 0.8, 1, 2.6).fill({ color: COLORS.brassDeep, alpha: 0.9 });
+      }
+    }
+  }
+
+  /** Dice face plates: idle tray, unspent/spent, or the §8 toss cycle on top. */
+  function drawDice(state: HudState): void {
+    diceLayer.clear();
+    // §6: the physical dice always sit on the tray; before the first roll they
+    // rest at half light so the primary interaction is never an empty tray
+    if (state.dice.length === 0) {
+      IDLE_DICE.forEach((value, index) => drawDiePlate(index, value, 'idle'));
+    } else {
+      state.dice.forEach((value, index) =>
+        drawDiePlate(index, value, state.remaining.includes(value) ? 'unspent' : 'spent'),
+      );
+    }
   }
 
   function chipLook(playerIndex: number) {
@@ -356,45 +440,48 @@ function strokeArc(
   graphics.stroke(style);
 }
 
-  function drawDiePlate(index: number, value: number, mode: 'unspent' | 'spent' | 'idle'): void {
+  function drawDiePlate(index: number, value: number, mode: 'unspent' | 'spent' | 'idle', pose?: { dy: number; squash: number }): void {
     const die = dice[index];
     if (die === undefined) return;
     const unspent = mode === 'unspent';
     const idle = mode === 'idle';
     const { x, y, size } = die;
+    const dy = pose?.dy ?? 0;
+    const squash = pose?.squash ?? 1;
+    const h = size * squash; // tossed plate lands with a §8 scaleY compress
     const k = size / 96;
     const radius = 18 * k;
     // porcelain stays porcelain while resting (art review #6): full material,
     // muted pips, brass rim — never the spent putty-grey
-    diceLayer.roundRect(x, y, size, size, radius).fill({ color: 0xf2ead8, alpha: idle ? 0.92 : unspent ? 1 : 0.45 });
+    diceLayer.roundRect(x, y + dy, size, h, radius).fill({ color: 0xf2ead8, alpha: idle ? 0.92 : unspent ? 1 : 0.45 });
     if (idle) {
       diceLayer
-        .roundRect(x, y, size, size, radius)
+        .roundRect(x, y + dy, size, h, radius)
         .stroke({ width: 2 * k, color: COLORS.brass, alpha: 0.55 });
     }
     // §3 height-fall: lit top edge, dark lower edge
     diceLayer
-      .moveTo(x + radius * 0.8, y + 1.6 * k)
-      .lineTo(x + size - radius * 0.8, y + 1.6 * k)
+      .moveTo(x + radius * 0.8, y + dy + 1.6 * k)
+      .lineTo(x + size - radius * 0.8, y + dy + 1.6 * k)
       .stroke({ width: 2 * k, color: 0xffffff, alpha: unspent ? 0.7 : 0.3 });
     diceLayer
-      .moveTo(x + radius * 0.8, y + size - 2.2 * k)
-      .lineTo(x + size - radius * 0.8, y + size - 2.2 * k)
+      .moveTo(x + radius * 0.8, y + dy + h - 2.2 * k)
+      .lineTo(x + size - radius * 0.8, y + dy + h - 2.2 * k)
       .stroke({ width: 3 * k, color: COLORS.engraved, alpha: unspent ? 0.28 : 0.15 });
 
-    const pipRadius = 9 * k;
+    const pipRadius = 9 * k * squash;
     const pipColor = unspent ? COLORS.engraved : COLORS.spentPip;
-    const offset = size * 0.26;
+    const offset = h * 0.26;
     const cx = x + size / 2;
-    const cy = y + size / 2;
-    for (const [dx, dy] of PIP_POSITIONS[value] ?? []) {
-      diceLayer.circle(cx + dx * offset, cy + dy * offset, pipRadius).fill({ color: pipColor, alpha: idle ? 0.66 : 1 });
+    const cy = y + dy + h / 2;
+    for (const [px, py] of PIP_POSITIONS[value] ?? []) {
+      diceLayer.circle(cx + px * offset, cy + py * offset, pipRadius).fill({ color: pipColor, alpha: idle ? 0.66 : 1 });
       // light bevel on top of every pip (§6); v8 connects the current path
       // point to a new arc otherwise
       strokeArc(
         diceLayer,
-        cx + dx * offset,
-        cy + dy * offset,
+        cx + px * offset,
+        cy + py * offset,
         pipRadius * 0.86,
         Math.PI * 1.25,
         Math.PI * 1.85,
@@ -404,9 +491,9 @@ function strokeArc(
 
     if (mode === 'spent') {
       diceLayer
-        .moveTo(x + size * 0.7, y + size * 0.55)
-        .lineTo(x + size * 0.78, y + size * 0.63)
-        .lineTo(x + size * 0.9, y + size * 0.4)
+        .moveTo(x + size * 0.7, y + dy + h * 0.55)
+        .lineTo(x + size * 0.78, y + dy + h * 0.63)
+        .lineTo(x + size * 0.9, y + dy + h * 0.4)
         .stroke({ width: 3.5 * k, color: COLORS.brass });
     }
   }
@@ -446,14 +533,16 @@ function strokeArc(
       if (orientation === 'portrait') {
         const topBar = Math.round(72 * pad);
         const trayHeight = Math.round(224 * pad);
-        const trayTop = height - trayHeight;
+        const top = Math.max(Math.round(8 * pad), safeArea.top); // §7 safe-area env
+        const bottom = Math.max(Math.round(8 * pad), safeArea.bottom);
+        const trayTop = height - bottom - trayHeight;
 
-        topPanel.rect(0, 0, width, topBar).fill({ color: COLORS.panel, alpha: 0.92 });
+        topPanel.rect(0, top, width, topBar).fill({ color: COLORS.panel, alpha: 0.92 });
         topPanel
-          .moveTo(0, topBar - 1)
-          .lineTo(width, topBar - 1)
+          .moveTo(0, top + topBar - 1)
+          .lineTo(width, top + topBar - 1)
           .stroke({ width: 1, color: COLORS.brass, alpha: 0.3 });
-        trayPanel.rect(0, trayTop, width, trayHeight).fill({ color: COLORS.panel, alpha: 0.92 });
+        trayPanel.rect(0, trayTop, width, height - trayTop).fill({ color: COLORS.panel, alpha: 0.92 });
         trayPanel
           .moveTo(0, trayTop)
           .lineTo(width, trayTop)
@@ -471,7 +560,7 @@ function strokeArc(
 
         sumChip.position.set(width / 2, diceY + diceSize + 30 * pad);
         message.position.set(width / 2, diceY + diceSize + 30 * pad);
-        rollButton.position.set(width / 2, height - 12 * pad - 26 * pad);
+        rollButton.position.set(width / 2, height - bottom - 12 * pad - 26 * pad);
       }
       if (orientation === 'landscape') {
         const panelWidth = Math.round(380 * pad);
@@ -479,16 +568,16 @@ function strokeArc(
         sidePanel.rect(panelX, 0, panelWidth, height).fill({ color: COLORS.panel, alpha: 0.92 });
         sidePanel.moveTo(panelX, 0).lineTo(panelX, height).stroke({ width: 1, color: COLORS.brass, alpha: 0.3 });
         // pause in the panel's top-left corner (art §7.3.1 corner icon)
-        pauseButton.position.set(panelX + 24 * pad + 2, 24 * pad + 2);
+        pauseButton.position.set(panelX + 24 * pad + 2, Math.max(24 * pad + 2, safeArea.top + 4));
 
         // top block: dice pair → sum chip → roll → message
         const diceX = panelX + (panelWidth - diceSize) / 2;
         dice = [0, 1].map((index) => ({
           x: diceX,
-          y: 20 * pad + index * (diceSize + diceGap),
+          y: Math.max(20 * pad, safeArea.top) + index * (diceSize + diceGap),
           size: diceSize,
         }));
-        sumChip.position.set(panelX + panelWidth / 2, dice[dice.length - 1].y + diceSize + 26 * pad);
+        sumChip.position.set(panelX + panelWidth / 2, dice[dice.length - 1]!.y + diceSize + 26 * pad);
         // reading order (round 3): dice → state line → action
         message.position.set(panelX + panelWidth / 2, sumChip.y + 44 * pad);
         rollButton.position.set(panelX + panelWidth / 2, message.y + 50 * pad);
@@ -498,7 +587,7 @@ function strokeArc(
         chips.forEach((chip, index) => {
           chip.pos = {
             x: panelX + 14 * pad + chipWidth() / 2,
-            y: height - 24 * pad - rowHeight / 2 - (chips.length - 1 - index) * (rowHeight + 10 * pad),
+            y: height - Math.max(24 * pad, safeArea.bottom) - rowHeight / 2 - (chips.length - 1 - index) * (rowHeight + 10 * pad),
           };
         });
       }
@@ -506,15 +595,21 @@ function strokeArc(
       if (orientation === 'portrait') {
         const cw = chipWidth();
         const totalRow = cw * 4 + 3 * 10 * pad;
+        const chipTop = Math.max(Math.round(8 * pad), safeArea.top);
         chips.forEach((chip, index) => {
           chip.pos = {
             x: (width - totalRow) / 2 + cw / 2 + index * (cw + 10 * pad),
-            y: Math.round(36 * pad), // centred in the 72 * pad top bar
+            y: chipTop + Math.round(36 * pad), // centred in the 72 * pad top bar
           };
         });
       }
 
-      drawPrimaryPlate(rollPlate, orientation === 'portrait' ? Math.min(width - 24 * pad, 430 * pad) : 348 * pad, 52 * pad);
+      rollPlateSize = {
+        width: orientation === 'portrait' ? Math.min(width - 24 * pad, 430 * pad) : 348 * pad,
+        height: 52 * pad,
+      };
+      drawPrimaryPlate(rollPlate, rollPlateSize.width, rollPlateSize.height);
+      redrawRollRing(); // focus ring follows the plate dims on resize
 
       // dice contact shadows, §3 (3,5) blur 12 alpha 0.35
       for (const { x, y, size } of dice) {
@@ -527,16 +622,8 @@ function strokeArc(
       }
     },
     update(state) {      remaining = [...state.remaining];
-      diceLayer.clear();
-      // §6: the physical dice always sit on the tray; before the first roll they
-      // rest at half light so the primary interaction is never an empty tray
-      if (state.dice.length === 0) {
-        IDLE_DICE.forEach((value, index) => drawDiePlate(index, value, 'idle'));
-      } else {
-        state.dice.forEach((value, index) =>
-          drawDiePlate(index, value, state.remaining.includes(value) ? 'unspent' : 'spent'),
-        );
-      }
+      lastState = state;
+      drawDice(state);
 
       if (state.sumLabel !== null) {
         sumChip.visible = true;
@@ -570,16 +657,91 @@ function strokeArc(
 
       rollButton.alpha = state.canRoll ? 1 : 0.45;
       rollButton.eventMode = state.canRoll ? 'static' : 'none';
+
+      // §8 turn hand-over: the brass rim rolls to the newly active chip
+      const activeChip = state.players.findIndex((player) => player.active);
+      if (activeChip >= 0 && activeChip !== lastActiveChip && lastActiveChip >= 0) {
+        handover = { age: 0, chipIndex: activeChip };
+      }
+      if (activeChip >= 0) lastActiveChip = activeChip;
+      redrawRollRing();
+    },
+    toss(values) {
+      toss = { age: 0, values };
+    },
+    setRollFocused(value) {
+      if (rollFocused === value) return;
+      rollFocused = value;
+      redrawRollRing();
     },
     tick(elapsedMs) {
       pulse += elapsedMs;
       dicePulse.clear();
-      if (remaining.length === 0) return;
-      const alpha = 0.4 + 0.4 * Math.sin((pulse / DICE_PULSE_MS) * Math.PI * 2);
-      for (const die of dice) {
-        dicePulse
-          .roundRect(die.x, die.y, die.size, die.size, 18 * (die.size / 96))
-          .stroke({ width: 2, color: COLORS.brassLight, alpha });
+      chipRing.clear();
+
+      // hand-over rim: 300 ms brass stroke fading out around the new active chip
+      if (handover !== null) {
+        handover.age += elapsedMs;
+        if (handover.age >= 300) {
+          handover = null;
+        } else if (lastState !== null) {
+          const chip = chips[handover.chipIndex];
+          if (chip !== undefined && chip.sprite.visible) {
+            const pad = geometry?.isTv ? TV_PAD : 1;
+            const cw = chipWidth();
+            const rowHeight = ((geometry?.orientation ?? 'portrait') === 'portrait'
+              ? ROW_HEIGHT_PORTRAIT
+              : ROW_HEIGHT_LANDSCAPE) * pad;
+            const t = handover.age / 300;
+            chipRing
+              .roundRect(chip.pos.x - cw / 2 - 3, chip.pos.y - rowHeight / 2 - 3, cw + 6, rowHeight + 6, rowHeight / 2 + 3)
+              .stroke({ width: 2.5 * pad, color: COLORS.brassLight, alpha: (1 - t) * 0.9 });
+          }
+        }
+      }
+
+      // §8 toss: rise 0–120, tumble with cycling faces 120–420, settle 420–560,
+      // second die lags the first by 60 ms; diceLayer redrew only while tossing
+      if (toss !== null && lastState !== null) {
+        toss.age += elapsedMs;
+        diceLayer.clear();
+        const DURATION = 560;
+        const finished = toss.age >= DURATION + 60;
+        for (let index = 0; index < dice.length; index += 1) {
+          if (finished) break;
+          const age = Math.max(0, toss.age - index * 60);
+          const t = Math.min(1, age / DURATION);
+          if (t <= 0) {
+            // the second die stays put until its lag elapses
+            const value = lastState.dice[index] ?? IDLE_DICE[index];
+            if (value !== undefined) drawDiePlate(index, value, 'idle');
+            continue;
+          }
+          const { dy, squash } = tossPose(t);
+          const cycling = t > 120 / DURATION && t < 420 / DURATION;
+          const value = cycling
+            ? Math.floor(Math.random() * 6) + 1
+            : (toss.values[index] ?? lastState.dice[index] ?? 3);
+          drawDiePlate(index, value, 'unspent', { dy, squash });
+        }
+        if (finished) {
+          toss = null;
+          diceLayer.clear();
+          if (lastState !== null) drawDice(lastState);
+          // §10: short porcelain click when the die lands
+          audio.play('settle');
+        }
+      } else if (remaining.length === 0) {
+        return;
+      }
+
+      if (remaining.length !== 0 && toss === null) {
+        const alpha = 0.4 + 0.4 * Math.sin((pulse / DICE_PULSE_MS) * Math.PI * 2);
+        for (const die of dice) {
+          dicePulse
+            .roundRect(die.x, die.y, die.size, die.size, 18 * (die.size / 96))
+            .stroke({ width: 2, color: COLORS.brassLight, alpha });
+        }
       }
     },
   };

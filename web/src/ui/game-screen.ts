@@ -11,12 +11,18 @@ import { createBoardView } from '../render/board-view';
 import { createPawnViews } from '../render/pawns';
 import { createHud, computeGameLayout } from '../render/hud';
 import type { GameLayout } from '../render/hud';
+import { createEffectsLayer } from '../render/effects';
+import { audio } from '../render/audio';
 import { sharedTextures } from '../render/table-surface';
 import { PLAYERS } from '../render/palette';
+import type { Point } from '../render/board-geometry';
 import { format, t } from '../i18n';
 import { seatLabel } from './players';
 import { createTutorialBanner } from './tutorial';
 import { HINT_TEXT_KEYS } from './hints';
+import { attachKeyGroup, detachKeyGroup } from './keys';
+import type { KeyGroup } from './keys';
+import type { Button } from './widgets';
 
 export type GameOutcomeKind = 'win' | 'lose' | 'draw';
 
@@ -59,6 +65,8 @@ export interface GameScreenOptions {
   hints?: readonly HintId[];
   onHintDismissed?(id: HintId): void;
   onGameOver?(outcome: GameOutcome): void;
+  /** Debug harness (#8 recordings): stage one effect cycle of the real pipeline. */
+  fxStage?: 'kill' | null;
 }
 
 export function createGameScreen(options: GameScreenOptions): GameScreen {
@@ -77,6 +85,7 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
   const textures = sharedTextures();
   const boardView = createBoardView(geometry, textures);
   const pawnViews = createPawnViews(game.board, geometry, textures, boardView.pointOf);
+  const effects = createEffectsLayer(textures);
   const hud = createHud(textures, { onRoll, onSum, onPause: options.onPauseRequest });
   if (options.visibleLayers !== undefined) {
     boardView.setLayerVisible(options.visibleLayers);
@@ -110,12 +119,17 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
 
   const root = new Container();
   root.label = 'game-screen';
-  root.addChild(boardLayer, hud.root, tutorial.root);
+  root.addChild(boardLayer, effects.root, hud.root, tutorial.root);
   root.eventMode = 'static';
 
   const tick = (): void => {
-    pawnViews.tick(options.ticker.deltaMS);
-    hud.tick(options.ticker.deltaMS);
+    const elapsed = options.ticker.deltaMS;
+    pawnViews.tick(elapsed);
+    hud.tick(elapsed);
+    effects.tick(elapsed);
+    // the §8 table shake offsets the board around its layout base
+    const offset = effects.shakeOffset();
+    boardLayer.position.set(boardBase.x + offset.x, boardBase.y + offset.y);
   };
   options.ticker.add(tick);
 
@@ -124,6 +138,7 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
   let busy = false;
   let thinking = false;
   let noMoves = false;
+  let boardBase = { x: 0, y: 0 };
 
   root.on('pointertap', (event: FederatedPointerEvent) => {
     if (busy || game.gameOver) return;
@@ -131,7 +146,13 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
 
     const pawn = pawnAt(point.x, point.y);
     if (pawn !== null) {
-      setSelection(pawn, game.legalMoves().filter((move) => move.pawnIndex === pawn.pawnIndex));
+      const pawnMoves = game.legalMoves().filter((move) => move.pawnIndex === pawn.pawnIndex);
+      if (pawnMoves.length === 0) {
+        // §8 refused move: ±3 px shake, clearly different from a legal selection
+        void refuse(pawnViews.sprite(pawn.playerIndex, pawn.pawnIndex));
+        return;
+      }
+      setSelection(pawn, pawnMoves);
       return;
     }
 
@@ -156,21 +177,101 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
         game.isHuman(game.playerIndex) && !busy ? pendingTargets() : [],
         null,
       );
-      return;
+    } else {
+      const sprite = pawnViews.sprite(selected.playerIndex, selected.pawnIndex);
+      boardView.highlight(pending.map((move) => move.targetCellIndex), { x: sprite.x, y: sprite.y });
     }
-    const sprite = pawnViews.sprite(selected.playerIndex, selected.pawnIndex);
-    boardView.highlight(pending.map((move) => move.targetCellIndex), { x: sprite.x, y: sprite.y });
+    rebuildFocus();
   }
 
   function pendingTargets(): number[] {
     return pending.map((move) => move.targetCellIndex);
   }
 
+  /* ---- TV / keyboard path (#8): arrows walk roll + legal targets, OK plays ---- */
+
+  interface FocusPair {
+    key: string;
+    button: Button;
+    apply: (value: boolean) => void;
+  }
+
+  let focusPairs: FocusPair[] = [];
+  let focusKey: string | null = null;
+
+  function makeFocusPair(key: string, apply: (value: boolean) => void, activate: () => void): FocusPair {
+    const pair: FocusPair = {
+      key,
+      apply,
+      button: {
+        root: root, // keys.ts never dereferences it; the screen is the group root
+        setLabel() {},
+        setFont() {},
+        setSize() {},
+        setFocused(value) {
+          if (value) focusKey = key;
+          else if (focusKey === key) focusKey = null;
+          apply(value);
+        },
+        isFocused: () => focusKey === key,
+        activate,
+      },
+    };
+    return pair;
+  }
+
+  /** Rebuilds the focusable list from the live state; keeps focus when an item survives. */
+  function rebuildFocus(): void {
+    const pairs: FocusPair[] = [];
+    if (!finished && !game.gameOver && game.isHuman(game.playerIndex)) {
+      if (!busy && game.remainingDice.length === 0) {
+        pairs.push(makeFocusPair('roll', (v) => hud.setRollFocused(v), () => onRoll()));
+      }
+      const seen = new Set<number>();
+      for (const move of pending) {
+        if (seen.has(move.targetCellIndex)) continue;
+        seen.add(move.targetCellIndex);
+        const cell = move.targetCellIndex;
+        pairs.push(
+          makeFocusPair(
+            `cell:${cell}`,
+            (v) => boardView.focusCell(v ? cell : null),
+            () => {
+              const candidates = pending.filter((candidate) => candidate.targetCellIndex === cell);
+              const chosen =
+                selected === null
+                  ? candidates[0]
+                  : (candidates.find((candidate) => candidate.pawnIndex === selected?.pawnIndex) ?? candidates[0]);
+              if (chosen !== undefined) void play(chosen);
+            },
+          ),
+        );
+      }
+    }
+    const stillThere = focusKey !== null && pairs.some((pair) => pair.key === focusKey);
+    if (!stillThere) {
+      const lost = focusPairs.find((pair) => pair.key === focusKey);
+      lost?.apply(false);
+      focusKey = null;
+    }
+    focusPairs = pairs;
+  }
+
+  const gameGroup: KeyGroup = { root, focusable: () => focusPairs.map((pair) => pair.button) };
+  attachKeyGroup(gameGroup);
+
   function onRoll(): void {
     if (busy || game.gameOver || game.remainingDice.length > 0 || !game.isHuman(game.playerIndex)) return;
 
     const events = game.rollDice();
     if (events.some((event) => event.type === 'moveRejected')) return;
+
+    // §8: the dice plate choreography runs from the real diceRolled event values
+    const rolled = events.find((event) => event.type === 'diceRolled');
+    if (rolled !== undefined && rolled.type === 'diceRolled') {
+      hud.toss(rolled.values);
+      audio.play('dice');
+    }
 
     // A roll that ends the turn had no legal move to play: say so before the hand-over.
     const ended = events.some((event) => event.type === 'turnEnded' || event.type === 'gameWon' || event.type === 'gameDrawn');
@@ -236,38 +337,112 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
           sprite.scale.set(fromScale + (toScale - fromScale) * eased);
           sprite.alpha = 0.75 + 0.25 * eased;
         });
+        // §8 placement: brass greeting ring on the corner as the pawn sets down
+        effects.ringFlash(corner.x, corner.y, geometry.scale);
+        audio.play('place');
       }
     }
 
     for (const cellIndex of path ?? []) {
       const target = boardView.pointOf(cellIndex);
       if (target === null) continue;
+      // §10: one hollow knock per cell, not per animation
+      audio.play('step');
       const from = { x: sprite.x, y: sprite.y };
-      await animate(160, (t) => {
+      await animate(170, (t) => {
         const eased = easeInOut(t);
         sprite.position.set(
           from.x + (target.x - from.x) * eased,
-          from.y + (target.y - from.y) * eased - Math.sin(Math.PI * t) * 16 * geometry.scale,
+          from.y + (target.y - from.y) * eased - Math.sin(Math.PI * t) * 20 * geometry.scale,
         );
       });
+      landSquash(sprite);
     }
 
     for (const event of events) {
       if (event.type !== 'pawnKilled') continue;
       const victim = pawnViews.sprite(event.victimPlayerIndex, event.victimPawnIndex);
       const target = pawnViews.benchPoint(event.victimPlayerIndex, event.victimPawnIndex);
-      const from = { x: victim.x, y: victim.y };
-      await animate(300, (t) => {
-        const eased = easeOut(t);
-        victim.position.set(
-          from.x + (target.x - from.x) * eased,
-          from.y + (target.y - from.y) * eased - Math.sin(Math.PI * t) * 40 * geometry.scale,
-        );
-      });
+      // §5 kill flash lives on the contact cell while the arc carries the victim away
+      effects.ringFlash(victim.x, victim.y, geometry.scale);
+      audio.play('kill');
+      await performKill(victim, target);
+    }
+    // §8 home entry: warm porcelain flash on the final cell
+    if (events.some((event) => event.type === 'enteredHome')) {
+      const lastCell =
+        move.kind === 'place' ? move.targetCellIndex : path === null ? null : path[path.length - 1];
+      const cell = lastCell === null ? null : boardView.pointOf(lastCell);
+      if (cell !== null) {
+        effects.glowFlash(cell.x, cell.y, geometry.cellSize * 2.6);
+        audio.play('home');
+      }
     }
 
     refreshCorners();
     pawnViews.sync();
+  }
+
+  /** §5/§8 kill: hop + 360° spin, then the bench arc with a high apex, shake and a brass/ivory burst. */
+  async function performKill(victim: Container, target: Point): Promise<void> {
+    const k = geometry.scale;
+    const from = { x: victim.x, y: victim.y };
+
+    if (!effects.claimExpensive()) {
+      // !benefit of the doubt stays: the cap §8 speaks about is normative; a thin arc limps home
+      await animate(300, (t) => {
+        const eased = easeOut(t);
+        victim.position.set(
+          from.x + (target.x - from.x) * eased,
+          from.y + (target.y - from.y) * eased - Math.sin(Math.PI * t) * 40 * k,
+        );
+      });
+      return;
+    }
+    try {
+      await animate(120, (t) => {
+        const eased = easeOut(t);
+        victim.position.set(from.x, from.y - Math.sin(Math.PI * t) * 24 * k);
+        victim.rotation = eased * Math.PI * 2;
+      });
+      victim.rotation = 0;
+      // the burst sells the contact; the bench arc carries the story
+      effects.burst(from.x, from.y + 6 * k, 0xf2ead8, 16);
+      effects.shake(3 * k);
+      await animate(360, (t) => {
+        const eased = easeOut(t);
+        victim.position.set(
+          from.x + (target.x - from.x) * eased,
+          from.y + (target.y - from.y) * eased - Math.sin(Math.PI * t) * 180 * k,
+        );
+        victim.rotation = Math.sin(Math.PI * t) * 0.6 * k;
+      });
+      victim.rotation = 0;
+    } finally {
+      effects.releaseExpensive();
+    }
+  }
+
+  /** §8 landing: 88 % scaleY compress easing back within ~70 ms; scale keeps its sync baseline. */
+  function landSquash(sprite: Container): void {
+    const baseY = sprite.scale.y;
+    const baseX = sprite.scale.x;
+    void animate(70, (t) => {
+      const eased = easeOut(t);
+      const factor = 0.88 + 0.12 * eased;
+      sprite.scale.set(baseX, baseY * factor);
+    });
+  }
+
+  /** §8 refused move: pawn shakes ±3 px and dulls, distinct from the happy selection. */
+  async function refuse(sprite: Container): Promise<void> {
+    audio.play('deny');
+    const home = { x: sprite.x, y: sprite.y };
+    await animate(240, (t) => {
+      const decay = (1 - t) ** 2;
+      sprite.position.set(home.x + Math.sin(t * 40) * 3 * geometry.scale * decay, home.y);
+    });
+    sprite.position.set(home.x, home.y);
   }
 
   /**
@@ -374,7 +549,7 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     pawnViews.setDisabled(0, disabled);
   }
 
-  function finishGame(): void {
+  function finishGame(cascade = true): void {
     if (finished) return;
     finished = true;
     pending = [];
@@ -382,11 +557,42 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     pawnViews.setSelected(null);
     boardView.highlight([]);
     tutorial.hide();
-    options.onGameOver?.({
+    const outcome: GameOutcome = {
       kind: game.result === 'draw' ? 'draw' : game.winnerPlayerIndex === 0 ? 'win' : 'lose',
       winnerSeat: game.result === 'draw' ? null : game.winnerPlayerIndex,
       turns: game.turnNumber,
-    });
+    };
+    // §8: victory rolls a 600 ms home-highlight series + a beat before the modal
+    if (outcome.kind === 'win' && cascade) {
+      void winCascade(outcome).then(() => options.onGameOver?.(outcome));
+      return;
+    }
+    if (outcome.kind === 'lose') audio.play('lose');
+    options.onGameOver?.(outcome);
+  }
+
+  /** §8 winning serenade: each homed pawn lights up in turn, the last lands with a flash. */
+  async function winCascade(outcome: GameOutcome): Promise<void> {
+    if (!effects.claimExpensive()) return;
+    audio.play('win');
+    try {
+      const winner = outcome.winnerSeat ?? 0;
+      const spots: Point[] = [];
+      for (let pawnIndex = 0; pawnIndex < game.config.numberOfPawns; pawnIndex += 1) {
+        if (!game.board.isHome(winner, pawnIndex)) continue;
+        const cell = game.board.position.cellOf(winner, pawnIndex);
+        const point = cell === null ? null : boardView.pointOf(cell);
+        if (point !== null) spots.push(point);
+      }
+      for (const spot of spots) {
+        effects.glowFlash(spot.x, spot.y, geometry.cellSize * 2.2);
+        await sleep(200);
+      }
+      if (spots.length > 0) effects.ringFlash(spots[spots.length - 1].x, spots[spots.length - 1].y, geometry.scale);
+      await sleep(800);
+    } finally {
+      effects.releaseExpensive();
+    }
   }
 
   /** §4 corner plate symbols hide as soon as a pawn stands on the corner. */
@@ -491,6 +697,30 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     }, 1200);
   }
 
+  // debug harness (#8 recordings): replay the real kill choreography once, engine untouched
+  if (options.fxStage === 'kill') {
+    setTimeout(() => {
+      const pawn = pawnViews.sprite(0, 0);
+      pawnViews.sync();
+      const from = geometry.ring[5];
+      const to = pawnViews.benchPoint(0, 0);
+      pawn.position.set(from.x, from.y);
+      effects.ringFlash(from.x, from.y, geometry.scale);
+      void performKill(pawn, to).then(() => {
+        effects.shake(3 * geometry.scale);
+        window.setTimeout(() => pawnViews.sync(), 400);
+      });
+    }, 1500);
+  }
+
+  // desktop-only §8 dust starts once the layout gives the stage a size
+  let dustStarted = false;
+  const maybeStartDust = (): void => {
+    if (dustStarted || root.parent === null) return;
+    dustStarted = true;
+    effects.startDust(root.parent.width, root.parent.height);
+  };
+
   return {
     root,
     setHudSuppressed(value) {
@@ -500,12 +730,20 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     layout(width, height) {
       gameLayout = computeGameLayout(width, height);
       geometry = createBoardGeometry(gameLayout.board.size, gameLayout.board.size);
+      boardBase = { x: gameLayout.board.x, y: gameLayout.board.y };
       boardLayer.position.set(gameLayout.board.x, gameLayout.board.y);
       boardView.layout(geometry);
       pawnViews.layout(geometry);
+      // #8 art handover, review round 2: portrait bench pawns are ~18x20 px and the
+      // recesses read as debris at that scale — the chip count (×4) carries everything.
+      // Landscape/TV keeps pawns at ~33x37 px with their slots.
+      const portrait = gameLayout.orientation === 'portrait' && !gameLayout.isTv;
+      pawnViews.setBenchVisible(!portrait);
+      boardView.setBenchSlotsVisible(!portrait);
       hud.layout(width, height, gameLayout);
       tutorial.layout(width, height, gameLayout);
       root.hitArea = new Rectangle(0, 0, width, height);
+      maybeStartDust();
       if (options.debug) {
         // measured, not asserted: frame rects and pawn boxes in screen px
         (window as unknown as Record<string, unknown>).__peshkiMeasure = () => {
@@ -542,6 +780,7 @@ export function createGameScreen(options: GameScreenOptions): GameScreen {
     },
     dispose() {
       options.ticker.remove(tick);
+      detachKeyGroup(gameGroup);
       tutorial.hide();
       root.destroy({ children: true });
     },
