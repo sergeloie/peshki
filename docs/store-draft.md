@@ -19,7 +19,7 @@ The name carries no word «игра»/«game» (6.5) and is short enough to read
 
 ## About the game
 
-**Русский** (198 characters, limit 500):
+**Русский** (209 characters, limit 500):
 
 ```
 Классическая гонка по деревянной доске в клубном кресле: четыре пешки, два кубика и три
@@ -27,7 +27,7 @@ The name carries no word «игра»/«game» (6.5) and is short enough to read
 Одна партия — 10–20 минут.
 ```
 
-**English** (196 characters):
+**English** (191 characters):
 
 ```
 A classic race on a wooden board: four pawns, two dice and three rivals. Capture their pawns,
@@ -86,7 +86,7 @@ first-match hint card.
 | Теги | `настольная игра`, `кубики`, `пешки`, `гонка`, `на двоих`, `против бота`, `браузерная игра`, `board game`, `dice`, `pawns` |
 
 The category is what the game is: a dice-and-pawn board race. Nothing here claims a mechanic the
-engine does not have (`web/test/engine/*.test.ts`, 23 numbered scenarios).
+engine does not have (`web/test/engine/*.test.ts`, 22 numbered scenarios).
 
 ## Age rating
 
