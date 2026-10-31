@@ -100,6 +100,7 @@ test.describe('art pass evidence', () => {
    *  - static scene: filters/masks alive in the tree, draw calls per rendered frame
    */
   test('art audit: boot-only textures, download bytes, static-scene cost, frame-time sample', async () => {
+    test.setTimeout(180_000); // census waits + the 3 s rAF sample: software budget only
     browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] });
     const page = await browser.newPage({ viewport: VIEWPORTS[1], deviceScaleFactor: 1 });
     await page.addInitScript(() => {
