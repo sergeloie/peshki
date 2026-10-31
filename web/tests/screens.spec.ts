@@ -339,6 +339,30 @@ test.describe('ticket #7 screens and i18n evidence', () => {
 });
 
 /**
+ * Ticket #9 evidence: the first-game hint card. No other shot in this battery
+ * shows it (every game capture dismisses it first), and the strip sits in the
+ * layout the reviewer has to see, so it gets its own fresh-profile capture.
+ */
+test.describe('ticket #9 hint card', () => {
+  test('hint card: portrait + landscape before any dismissal', async () => {
+    mkdirSync(SHOT_DIR, { recursive: true });
+    for (const viewport of [
+      { name: 'portrait', width: 390, height: 844 },
+      { name: 'landscape', width: 1280, height: 720 },
+    ]) {
+      browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] });
+      const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: 1 });
+      await page.goto('http://localhost:5173/?screen=game&seed=424242');
+      await page.waitForSelector('canvas');
+      // the card is on the first frame; bots animate underneath, so hold it briefly
+      await page.waitForTimeout(1500);
+      await page.screenshot({ path: resolve(SHOT_DIR, `screens-hint-${viewport.name}.png`), timeout: 55_000 });
+      await dropBrowser();
+    }
+  });
+});
+
+/**
  * Ticket #8 evidence, bounded CPU: the fx=kill debug staging replays the real
  * kill choreography (engine untouched); capture lands mid-arc with the ring
  * flash, particles and shake alive. Two viewports, one shoot each.
